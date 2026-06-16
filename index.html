@@ -52,7 +52,7 @@ body {
   transition: background-color .3s ease, color .3s ease;
 }
 .container { max-width: 920px; margin: 0 auto; position: relative; }
-h1 { color: var(--text-primary); font-size: 1.55rem; margin-bottom: .15rem; display:flex; align-items:center; gap:.5rem; }
+h1 { color: var(--text-primary); font-size: 1.55rem; margin-bottom: .15rem; display:flex; align-items:center; gap:.5rem; padding-right: 2.6rem; }
 h1 .logo { font-size: 1.6rem; }
 h1 .plus { color: var(--accent); }
 .subtitle { color: var(--text-secondary); font-size: .85rem; margin-bottom: 1.25rem; }
@@ -209,6 +209,9 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   .now-icon { font-size:3.4rem; }
   .model-table { font-size:.72rem; }
   .model-table th, .model-table td { padding:.4rem .3rem; }
+  /* Bug 2: evita que el botó "Cercar" surti de pantalla en mòbil */
+  .search-box { flex-wrap: wrap; }
+  #searchBtn { flex: 1 0 100%; }
 }
 </style>
 </head>
