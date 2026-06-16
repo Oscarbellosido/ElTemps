@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>El Temps — predicció multi-model</title>
 <meta name="description" content="Predicció meteorològica precisa amb consens de múltiples models (ECMWF, ICON, AROME, GFS…). Catalunya i tot el món.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 /* ── Variables ──────────────────────────────────────────────────────────────── */
 :root {
@@ -204,6 +205,15 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .footer-note a:hover { text-decoration:underline; }
 .alert-row { display:flex; align-items:flex-start; gap:.6rem; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.3); border-radius:12px; padding:.7rem .9rem; margin-bottom:1.1rem; font-size:.82rem; color:var(--warn); }
 .alert-row .ic { font-size:1.05rem; }
+
+/* ── Radar de pluja ─────────────────────────────────────────────────────────── */
+#radar-map { width:100%; height:380px; border-radius:12px; overflow:hidden; background:var(--bg-card); position:relative; z-index:0; }
+.radar-controls { display:flex; align-items:center; gap:.6rem; margin-top:.75rem; }
+.radar-controls #radarPlayBtn { padding:.6rem .9rem; min-width:2.8rem; }
+#radarSlider { flex:1; min-width:0; accent-color:var(--accent); cursor:pointer; }
+.radar-time { font-size:.78rem; color:var(--text-secondary); flex:0 0 auto; min-width:10rem; }
+.radar-nowcast { color:var(--accent); }
+
 @media (max-width:560px){
   .now-temp { font-size:3rem; }
   .now-icon { font-size:3.4rem; }
@@ -212,6 +222,8 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   /* Bug 2: evita que el botó "Cercar" surti de pantalla en mòbil */
   .search-box { flex-wrap: wrap; }
   #searchBtn { flex: 1 0 100%; }
+  #radar-map { height:250px; }
+  .radar-time { min-width:0; }
 }
 </style>
 </head>
@@ -244,6 +256,7 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   </p>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
    MeteoCat+ — predicció multi-model amb Open-Meteo
@@ -487,9 +500,11 @@ function render(loc, fc, models, air){
     renderDaily(fc),
     renderConsensus(models),
     renderAir(air),
+    renderRadar(),
   ].filter(Boolean).join('');
   $('result').innerHTML = html;
   if(models) wireConsensus(models);
+  initRadar(loc);
 }
 
 function renderNow(loc, fc){
@@ -698,6 +713,87 @@ function renderAir(air){
   return `<div class="card"><h2><span class="ic">🌫️</span> Qualitat de l'aire</h2>
     <div class="aq-grid">${cells}</div>
     <div class="card-note">Índex europeu de qualitat de l'aire (EAQI). Valors més baixos = aire més net.</div></div>`;
+}
+
+/* ── Radar de pluja (RainViewer + Leaflet) ──────────────────────────────────── */
+let radarMap=null, radarLayers=[], radarFrames=[], radarIdx=0, radarTimer=null;
+
+function renderRadar(){
+  return `<div class="card">
+    <h2><span class="ic">🌧️</span> Radar de pluja <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· RainViewer</span></h2>
+    <div id="radar-map"></div>
+    <div class="radar-controls" id="radarControls" style="visibility:hidden">
+      <button class="btn-sec" id="radarPlayBtn" onclick="toggleRadarPlay()">▶</button>
+      <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" oninput="showRadarFrame(+this.value)">
+      <span id="radarTime" class="radar-time">Carregant…</span>
+    </div>
+    <p class="card-note">Radar de precipitació en temps real · Previsió a curt termini inclosa · Dades: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a></p>
+  </div>`;
+}
+
+async function initRadar(loc){
+  if(typeof L==='undefined') return;
+  if(radarTimer){ clearInterval(radarTimer); radarTimer=null; }
+  if(radarMap){ radarMap.remove(); radarMap=null; }
+  radarLayers=[]; radarFrames=[]; radarIdx=0;
+  const el=$('radar-map'); if(!el) return;
+
+  radarMap=L.map('radar-map',{ zoomControl:true }).setView([loc.lat,loc.lon],7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:18
+  }).addTo(radarMap);
+  L.circleMarker([loc.lat,loc.lon],{
+    radius:6, fillColor:'#38bdf8', color:'#fff', weight:2, fillOpacity:1
+  }).addTo(radarMap);
+
+  try{
+    const r=await fetch('https://api.rainviewer.com/public/weather-maps.json',{signal:AbortSignal.timeout(10000)});
+    if(!r.ok) throw new Error('rainviewer');
+    const data=await r.json(); const host=data.host;
+    const past=data.radar?.past||[], nowcast=data.radar?.nowcast||[];
+    radarFrames=[
+      ...past.map(f=>({time:f.time,path:f.path,host,type:'past'})),
+      ...nowcast.map(f=>({time:f.time,path:f.path,host,type:'nowcast'}))
+    ];
+    if(!radarFrames.length) return;
+    radarLayers=radarFrames.map(f=>
+      L.tileLayer(`${f.host}${f.path}/512/{z}/{x}/{y}/6/1_1.png`,{
+        opacity:0.7, zIndex:2, tileSize:512, zoomOffset:-1
+      })
+    );
+    const slider=$('radarSlider'); if(slider) slider.max=radarFrames.length-1;
+    showRadarFrame(past.length>0 ? past.length-1 : 0);
+    const ctrl=$('radarControls'); if(ctrl) ctrl.style.visibility='visible';
+  }catch(e){
+    const t=$('radarTime'); if(t) t.textContent='No s\'ha pogut carregar el radar.';
+  }
+}
+
+function showRadarFrame(idx){
+  if(!radarMap||!radarFrames.length) return;
+  idx=Math.max(0,Math.min(idx,radarFrames.length-1)); radarIdx=idx;
+  radarLayers.forEach((l,i)=>{
+    if(i===idx){ if(!radarMap.hasLayer(l)) l.addTo(radarMap); }
+    else{ if(radarMap.hasLayer(l)) radarMap.removeLayer(l); }
+  });
+  const f=radarFrames[idx];
+  const d=new Date(f.time*1000);
+  const hh=d.getHours().toString().padStart(2,'0'), mm=d.getMinutes().toString().padStart(2,'0');
+  const t=$('radarTime');
+  if(t) t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
+    +(f.type==='nowcast'?' <span class="radar-nowcast">◎ previsió</span>':'');
+  const slider=$('radarSlider'); if(slider) slider.value=idx;
+}
+
+function toggleRadarPlay(){
+  if(radarTimer){
+    clearInterval(radarTimer); radarTimer=null;
+    const btn=$('radarPlayBtn'); if(btn) btn.textContent='▶';
+  }else{
+    const btn=$('radarPlayBtn'); if(btn) btn.textContent='⏸';
+    radarTimer=setInterval(()=>showRadarFrame((radarIdx+1)%radarFrames.length),500);
+  }
 }
 
 /* ── Init ────────────────────────────────────────────────────────────────────── */
