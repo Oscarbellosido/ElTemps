@@ -1,0 +1,17 @@
+{
+  "name": "El Temps",
+  "short_name": "El Temps",
+  "description": "Predicció meteorològica multi-model per Catalunya i tot el món",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b1929",
+  "theme_color": "#38bdf8",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
