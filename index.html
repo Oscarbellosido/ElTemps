@@ -923,6 +923,14 @@ async function initRadar(loc){
     radius:6, fillColor:'#38bdf8', color:'#fff', weight:2, fillOpacity:1
   }).addTo(radarMap);
 
+  // El mapa es crea mentre #result encara és display:none (la classe .show
+  // s'afegeix després). Cal recalcular la mida quan ja és visible, o Leaflet
+  // només carrega un tros de tiles (es veu buit a l'escriptori).
+  const fixSize = () => { if(radarMap) radarMap.invalidateSize(); };
+  setTimeout(fixSize, 150);
+  setTimeout(fixSize, 500);
+  setTimeout(fixSize, 1200);
+
   try{
     const r=await fetch('https://api.rainviewer.com/public/weather-maps.json',{signal:AbortSignal.timeout(10000)});
     if(!r.ok) throw new Error('rainviewer');
