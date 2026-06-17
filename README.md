@@ -98,7 +98,9 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
+- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent, i avisos (UV, calor, fred, fiabilitat dels models)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
+- [x] **Gràfic horari** (corba de temperatura + barres de pluja) a "Pròximes 24 hores"
 - [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃)
 - [x] **Radar de pluja** (mapa Leaflet + capes de RainViewer)
 - [x] Cerca mundial amb autocompletar (català/castellà) + geolocalització
@@ -115,7 +117,6 @@ Coses que es poden incorporar més endavant:
 - [ ] **Alertes/avisos oficials** (Meteocat / AEMET / Meteoalarm) per pluja, vent, calor…
 - [ ] **Notificacions** quan es preveu pluja a les pròximes hores (mentre la pestanya és oberta)
 - [ ] **Service worker** per funcionar sense connexió (PWA completa offline)
-- [ ] **Gràfic** de temperatura i precipitació per hores (mini-corba)
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
 - [ ] **Pol·len** i índex de raigs UV detallat (Open-Meteo ho ofereix)
 - [ ] **Comparació de llocs** (veure dos pobles alhora)

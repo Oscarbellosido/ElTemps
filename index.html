@@ -200,6 +200,35 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .aq-cell .unit { font-size:.66rem; color:var(--text-secondary); font-weight:500; }
 .aq-cell .cat { font-size:.66rem; margin-top:.2rem; font-weight:600; }
 
+/* ── Resum del dia ──────────────────────────────────────────────────────────── */
+.summary-card {
+  background: linear-gradient(135deg, rgba(56,189,248,.16), rgba(14,165,233,.05)), var(--bg-secondary);
+  border:1px solid var(--border); border-radius:18px; padding:1.3rem 1.5rem; margin-bottom:1.1rem;
+  transition:background-color .3s ease;
+}
+.sum-head { display:flex; align-items:center; gap:.85rem; margin-bottom:.75rem; }
+.sum-icon { font-size:2.7rem; line-height:1; }
+.sum-title { font-size:1.05rem; font-weight:700; }
+.sum-sub { color:var(--text-secondary); font-size:.78rem; }
+.sum-text { font-size:.92rem; line-height:1.75; color:var(--text-primary); }
+.sum-text strong { color:var(--accent); font-weight:700; }
+.sum-text .hot { color:var(--warm); font-weight:700; }
+.sum-text .cold-t { color:var(--cold); font-weight:700; }
+.sum-tags { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:1rem; }
+.sum-tag { font-size:.74rem; font-weight:600; padding:.32rem .7rem; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); display:inline-flex; align-items:center; gap:.3rem; }
+.sum-tag.warn { color:var(--warn); border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.1); }
+.sum-tag.rain { color:var(--accent); border-color:var(--border); background:rgba(56,189,248,.1); }
+
+/* ── Gràfic horari ──────────────────────────────────────────────────────────── */
+.hour-chart { width:100%; height:auto; display:block; margin-bottom:.85rem; overflow:visible; }
+.hour-chart .temp-line { fill:none; stroke:var(--warm); stroke-width:2.5; stroke-linejoin:round; stroke-linecap:round; }
+.hour-chart .temp-dot { fill:var(--warm); }
+.hour-chart .precip-bar { fill:var(--accent); opacity:.45; }
+.hour-chart .grid-line { stroke:var(--border); stroke-width:1; }
+.hour-chart .axis-lbl { fill:var(--text-secondary); font-size:10px; }
+.hour-chart .temp-lbl { fill:var(--text-primary); font-size:10px; font-weight:700; }
+.hour-chart .precip-lbl { fill:var(--accent); font-size:9px; font-weight:600; }
+
 /* ── Misc ───────────────────────────────────────────────────────────────────── */
 #result { display:none; }
 #result.show { display:block; animation:fadeSlide .35s ease-out; }
@@ -263,7 +292,7 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
-   MeteoCat+ — predicció multi-model amb Open-Meteo
+   El Temps — predicció multi-model amb Open-Meteo
    ════════════════════════════════════════════════════════════════════════════ */
 const RECENT_KEY = 'eltemps_recent';
 const THEME_KEY  = 'eltemps_theme';
@@ -320,6 +349,7 @@ function wmoIcon(code, isDay){
 const DAYS = ['Diumenge','Dilluns','Dimarts','Dimecres','Dijous','Divendres','Dissabte'];
 const DAYS_SHORT = ['dg','dl','dt','dc','dj','dv','ds'];
 const MONTHS = ['gen','feb','març','abr','maig','juny','jul','ag','set','oct','nov','des'];
+const MONTHS_FULL = ['gener','febrer','març','abril','maig','juny','juliol','agost','setembre','octubre','novembre','desembre'];
 
 /* ── Helpers ─────────────────────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -508,6 +538,7 @@ async function fetchAir(loc){
 /* ── Render ──────────────────────────────────────────────────────────────────── */
 function render(loc, fc, models, air){
   const html = [
+    renderSummary(loc, fc, models),
     renderNow(loc, fc),
     renderHourly(fc),
     renderDaily(fc),
@@ -518,6 +549,91 @@ function render(loc, fc, models, air){
   $('result').innerHTML = html;
   if(models) wireConsensus(models);
   initRadar(loc);
+}
+
+/* ── Resum del dia (llenguatge planer) ───────────────────────────────────────── */
+function hourLabel(t){ return new Date(t).getHours().toString().padStart(2,'0') + 'h'; }
+function groupRanges(indices){
+  const out=[]; let s=null,p=null;
+  for(const i of indices){
+    if(s===null){ s=i; p=i; }
+    else if(i===p+1){ p=i; }
+    else { out.push([s,p]); s=i; p=i; }
+  }
+  if(s!==null) out.push([s,p]);
+  return out;
+}
+function renderSummary(loc, fc, models){
+  const c=fc.current, d=fc.daily, h=fc.hourly;
+  if(!d?.time) return '';
+  const [icon, desc] = wmo(d.weather_code[0]);
+  const tmax=Math.round(d.temperature_2m_max[0]), tmin=Math.round(d.temperature_2m_min[0]);
+  const feelsMax = d.apparent_temperature_max?.[0]!=null ? Math.round(d.apparent_temperature_max[0]) : null;
+  const now = new Date(c.time);
+  const sub = `${DAYS[now.getDay()]}, ${now.getDate()} de ${MONTHS_FULL[now.getMonth()]}`;
+
+  // Frase principal
+  let txt = `Avui a <strong>${esc(loc.name)}</strong>: <strong>${desc.toLowerCase()}</strong>, `
+    + `amb màximes de <span class="hot">${tmax}°</span> i mínimes de <span class="cold-t">${tmin}°</span>.`;
+  if(feelsMax!=null && Math.abs(feelsMax - tmax) >= 3)
+    txt += ` La sensació tèrmica pot arribar als <strong>${feelsMax}°</strong>.`;
+
+  // Pluja: quan plourà la resta del dia (hores amb prob ≥ 40%)
+  const nowIso = c.time.slice(0,13);
+  let start = h.time.findIndex(t => t.slice(0,13) === nowIso); if(start<0) start=0;
+  const todayDate = c.time.slice(0,10);
+  const rainHours=[];
+  for(let i=start;i<h.time.length;i++){
+    if(h.time[i].slice(0,10) !== todayDate) break;        // només la resta d'avui
+    if((h.precipitation_probability[i]??0) >= 40) rainHours.push(i);
+  }
+  if(c.precipitation > 0) txt += ` <strong>Ara mateix plou.</strong>`;
+  if(rainHours.length){
+    const parts = groupRanges(rainHours).map(([a,b]) =>
+      a===b ? `cap a les ${hourLabel(h.time[a])}` : `entre les ${hourLabel(h.time[a])} i les ${hourLabel(h.time[b])}`);
+    const maxProb = Math.max(...rainHours.map(i=>h.precipitation_probability[i]));
+    txt += ` S'esperen <strong>precipitacions ${parts.join(' i ')}</strong> (fins al ${maxProb}% de probabilitat).`;
+  } else if(c.precipitation <= 0){
+    txt += ` No s'espera pluja a la resta del dia.`;
+  }
+
+  // Vent destacable
+  const wmax=Math.round(d.wind_speed_10m_max?.[0]??0), gust=Math.round(d.wind_gusts_10m_max?.[0]??0);
+  if(gust>=50 || wmax>=35)
+    txt += ` Bufarà vent de <strong>${compass(d.wind_direction_10m_dominant?.[0]??0)}</strong> amb ratxes de fins a <strong>${gust} km/h</strong>.`;
+
+  // Etiquetes d'avís / consell
+  const uv=d.uv_index_max?.[0]??0;
+  const willRain = rainHours.length>0 || (d.precipitation_probability_max?.[0]??0) >= 50;
+  const tags=[];
+  if(willRain) tags.push(['☂️ Emporta\'t paraigua','rain']);
+  if(tmax>=30) tags.push(['🥵 Calor: hidrata\'t','warn']);
+  if(tmin<=3)  tags.push(['🧥 Fred: abriga\'t','warn']);
+  if(uv>=7)    tags.push([`🧴 UV alt (${r1(uv)}): protecció`,'warn']);
+  if(gust>=50) tags.push(['💨 Ratxes fortes','warn']);
+
+  // Acord entre models per a avui (fiabilitat)
+  if(models?.daily){
+    const arr = MODELS.map(m=>models.daily['temperature_2m_max_'+m.key]?.[0]).filter(v=>v!=null);
+    if(arr.length>=2){
+      const sp = Math.max(...arr)-Math.min(...arr);
+      if(sp<=2)        tags.push(['🎯 Models d\'acord (alta fiabilitat)','']);
+      else if(sp<=4.5) tags.push(['🎯 Acord moderat entre models','']);
+      else             tags.push(['⚠️ Els models discrepen','warn']);
+    }
+  }
+  if(!tags.length) tags.push(['🙂 Dia tranquil','']);
+
+  const tagsHtml = tags.map(([t,cls])=>`<span class="sum-tag ${cls}">${t}</span>`).join('');
+
+  return `<div class="summary-card">
+    <div class="sum-head">
+      <span class="sum-icon">${icon}</span>
+      <div><div class="sum-title">Resum d'avui a ${esc(loc.name)}</div><div class="sum-sub">${sub}</div></div>
+    </div>
+    <p class="sum-text">${txt}</p>
+    <div class="sum-tags">${tagsHtml}</div>
+  </div>`;
 }
 
 function renderNow(loc, fc){
@@ -570,8 +686,9 @@ function renderHourly(fc){
   let start=h.time.findIndex(t=>t.slice(0,13)===nowIso);
   if(start<0) start=0;
   const end=Math.min(start+24, h.time.length);
+  const idx=[]; for(let i=start;i<end;i++) idx.push(i);
   let cells='';
-  for(let i=start;i<end;i++){
+  for(const i of idx){
     const d=new Date(h.time[i]);
     const icon=wmoIcon(h.weather_code[i], h.is_day[i]===1);
     const prob=h.precipitation_probability[i];
@@ -583,7 +700,53 @@ function renderHourly(fc){
     </div>`;
   }
   return `<div class="card"><h2><span class="ic">🕐</span> Pròximes 24 hores</h2>
+    ${renderHourlyChart(h, idx)}
     <div class="hourly-scroll">${cells}</div></div>`;
+}
+
+/* Mini-gràfic SVG: corba de temperatura + barres de probabilitat de pluja */
+function renderHourlyChart(h, idx){
+  if(idx.length<2) return '';
+  const W=720, H=150, padL=8, padR=8, padT=22, padB=26;
+  const innerW=W-padL-padR, innerH=H-padT-padB;
+  const temps=idx.map(i=>h.temperature_2m[i]);
+  const probs=idx.map(i=>h.precipitation_probability[i]??0);
+  let tmin=Math.min(...temps), tmax=Math.max(...temps);
+  if(tmax-tmin<1) tmax=tmin+1;
+  const n=idx.length;
+  const x=k => padL + (n===1?0:(k/(n-1))*innerW);
+  const y=t => padT + innerH - ((t-tmin)/(tmax-tmin))*innerH;
+
+  // Barres de pluja (escala 0–100% sobre tota l'alçada interior)
+  const barW=innerW/n*0.62;
+  let bars='';
+  idx.forEach((i,k)=>{
+    if(probs[k]>0){
+      const bh=(probs[k]/100)*innerH;
+      bars += `<rect class="precip-bar" x="${(x(k)-barW/2).toFixed(1)}" y="${(padT+innerH-bh).toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="2"/>`;
+    }
+  });
+  // Línia de temperatura
+  const pts=idx.map((i,k)=>`${x(k).toFixed(1)},${y(temps[k]).toFixed(1)}`).join(' ');
+  // Etiquetes de temperatura i hora cada 3 hores
+  let labels='', dots='';
+  idx.forEach((i,k)=>{
+    const showT = (k%3===0) || k===n-1;
+    if(showT){
+      dots += `<circle class="temp-dot" cx="${x(k).toFixed(1)}" cy="${y(temps[k]).toFixed(1)}" r="2.5"/>`;
+      labels += `<text class="temp-lbl" x="${x(k).toFixed(1)}" y="${(y(temps[k])-7).toFixed(1)}" text-anchor="middle">${Math.round(temps[k])}°</text>`;
+      const hr=new Date(h.time[i]).getHours().toString().padStart(2,'0');
+      labels += `<text class="axis-lbl" x="${x(k).toFixed(1)}" y="${(H-8)}" text-anchor="middle">${k===0?'Ara':hr+'h'}</text>`;
+      if(probs[k]>0)
+        labels += `<text class="precip-lbl" x="${x(k).toFixed(1)}" y="${(padT+innerH-(probs[k]/100)*innerH-3).toFixed(1)}" text-anchor="middle">${probs[k]}%</text>`;
+    }
+  });
+  return `<svg class="hour-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gràfic de temperatura i pluja per hores">
+    <line class="grid-line" x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}"/>
+    ${bars}
+    <polyline class="temp-line" points="${pts}"/>
+    ${dots}${labels}
+  </svg>`;
 }
 
 function renderDaily(fc){
