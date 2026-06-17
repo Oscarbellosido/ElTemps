@@ -1136,6 +1136,11 @@ function toggleRadarPlay(){
   if(recent.length) loadWeather(recent[0]);
   else loadWeather(QUICK_CITIES[0]); // Barcelona per defecte
 })();
+
+/* ── PWA: registre del service worker (instal·lable + offline) ───────────────── */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+}
 </script>
 </body>
 </html>
