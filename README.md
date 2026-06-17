@@ -19,7 +19,10 @@ dependències. Per provar-ho en local només cal obrir el fitxer amb el navegado
 Temps/
 ├── index.html      ← l'aplicació sencera (edita aquí)
 ├── manifest.json   ← configuració PWA (instal·lable al mòbil)
-├── icon.svg        ← icona de l'app
+├── sw.js           ← service worker (offline + instal·lació)
+├── icon.svg        ← icona de l'app (vectorial)
+├── icon-192.png    ← icona PWA 192px
+├── icon-512.png    ← icona PWA 512px (i maskable)
 ├── README.md       ← aquest document
 └── .gitignore
 ```
@@ -114,7 +117,7 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] Cerca mundial amb autocompletar (català/castellà) + geolocalització
 - [x] Accés ràpid a ciutats catalanes + històric de cerques recents
 - [x] Tema clar/fosc + disseny responsive per a mòbil
-- [x] **PWA**: icona pròpia i "afegir a la pantalla d'inici" (`manifest.json`)
+- [x] **PWA instal·lable** a Android/escriptori (manifest + service worker + icones PNG): botó "Instal·la l'aplicació", funciona offline (la carcassa) i s'actualitza sola
 
 ---
 
@@ -123,7 +126,6 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 Coses que es poden incorporar més endavant:
 
 - [ ] **Notificacions** quan es preveu pluja a les pròximes hores (mentre la pestanya és oberta)
-- [ ] **Service worker** per funcionar sense connexió (PWA completa offline)
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
 - [ ] **Pol·len** i índex de raigs UV detallat (Open-Meteo ho ofereix)
 - [ ] **Comparació de llocs** (veure dos pobles alhora)
