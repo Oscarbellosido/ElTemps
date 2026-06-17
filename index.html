@@ -370,14 +370,23 @@ function goCity(i){ loadWeather(QUICK_CITIES[i]); }
 /* ── Geocodificació (cerca i suggeriments) ───────────────────────────────────── */
 let sugTimer=null, sugItems=[], sugActive=-1;
 async function fetchSuggest(name){
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&language=ca&format=json`;
-  const r = await fetch(url, { signal:AbortSignal.timeout(8000) });
-  if(!r.ok) throw new Error('geo');
-  const j = await r.json();
-  return (j.results||[]).map(o=>({
-    name:o.name, region:[o.admin2,o.admin1].filter(Boolean).join(', '),
-    country:o.country, lat:o.latitude, lon:o.longitude, cc:o.country_code
-  }));
+  const base = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&format=json`;
+  const sig = AbortSignal.timeout(8000);
+  const safe = p => p.then(r => r.ok ? r.json() : { results:[] }).catch(() => ({ results:[] }));
+  const [jCa, jEs] = await Promise.all([
+    safe(fetch(base + '&language=ca', { signal:sig })),
+    safe(fetch(base + '&language=es', { signal:sig }))
+  ]);
+  const seen = new Set();
+  const results = [];
+  for (const o of [...(jCa.results||[]), ...(jEs.results||[])]) {
+    if (!seen.has(o.id)) {
+      seen.add(o.id);
+      results.push({ name:o.name, region:[o.admin2,o.admin1].filter(Boolean).join(', '),
+        country:o.country, lat:o.latitude, lon:o.longitude, cc:o.country_code, _pop:o.population||0 });
+    }
+  }
+  return results.sort((a,b) => b._pop - a._pop).slice(0, 6);
 }
 function flag(cc){ if(!cc) return ''; return cc.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt())); }
 function renderSuggest(){
