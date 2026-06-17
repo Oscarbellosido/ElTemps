@@ -538,7 +538,7 @@ async function fetchAir(loc){
 /* ── Render ──────────────────────────────────────────────────────────────────── */
 function render(loc, fc, models, air){
   const html = [
-    renderSummary(loc, fc, models),
+    renderSummary(loc, fc, models, air),
     renderNow(loc, fc),
     renderHourly(fc),
     renderDaily(fc),
@@ -563,7 +563,7 @@ function groupRanges(indices){
   if(s!==null) out.push([s,p]);
   return out;
 }
-function renderSummary(loc, fc, models){
+function renderSummary(loc, fc, models, air){
   const c=fc.current, d=fc.daily, h=fc.hourly;
   if(!d?.time) return '';
   const [icon, desc] = wmo(d.weather_code[0]);
@@ -577,6 +577,10 @@ function renderSummary(loc, fc, models){
     + `amb màximes de <span class="hot">${tmax}°</span> i mínimes de <span class="cold-t">${tmin}°</span>.`;
   if(feelsMax!=null && Math.abs(feelsMax - tmax) >= 3)
     txt += ` La sensació tèrmica pot arribar als <strong>${feelsMax}°</strong>.`;
+
+  // Sensació tèrmica actual tenint en compte la humitat de l'ambient
+  const tNow=Math.round(c.temperature_2m), feelsNow=Math.round(c.apparent_temperature), hum=c.relative_humidity_2m;
+  txt += ` Ara fa <strong>${tNow}°</strong> amb un <strong>${hum}%</strong> d'humitat; la sensació és de <strong>${feelsNow}°</strong>.`;
 
   // Pluja: quan plourà la resta del dia (hores amb prob ≥ 40%)
   const nowIso = c.time.slice(0,13);
@@ -608,9 +612,16 @@ function renderSummary(loc, fc, models){
   const tags=[];
   if(willRain) tags.push(['☂️ Emporta\'t paraigua','rain']);
   if(tmax>=30) tags.push(['🥵 Calor: hidrata\'t','warn']);
+  if(feelsNow >= tNow+3 && tNow>=25) tags.push([`🥵 Xafogor: sensació ${feelsNow}° per la humitat`,'warn']);
   if(tmin<=3)  tags.push(['🧥 Fred: abriga\'t','warn']);
   if(uv>=7)    tags.push([`🧴 UV alt (${r1(uv)}): protecció`,'warn']);
   if(gust>=50) tags.push(['💨 Ratxes fortes','warn']);
+
+  // Nivell de contaminació (qualitat de l'aire)
+  if(air?.current?.european_aqi!=null){
+    const aqi=air.current.european_aqi, [acat,acol]=aqiCat(aqi);
+    tags.push([`<span style="color:${acol}">●</span> Aire: ${acat} (${aqi})`, aqi>60?'warn':'']);
+  }
 
   // Acord entre models per a avui (fiabilitat)
   if(models?.daily){
