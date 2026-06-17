@@ -621,12 +621,20 @@ async function loadAlerts(loc, gen){
         onset, exp, instr:info.instruction });
     }
     if(gen!==loadGen) return;
-    renderAlerts(found);
+    renderAlerts(found, true);
   }catch(e){}
 }
-function renderAlerts(list){
+function renderAlerts(list, checked){
   const old=$('alertBanner'); if(old) old.remove();
-  if(!list.length) return;
+  if(!list.length){
+    if(!checked) return;   // zona sense feed o error → no mostrem res
+    const html=`<div class="card alert-banner" id="alertBanner" style="border-color:rgba(74,222,128,.3)">
+      <div style="display:flex;align-items:center;gap:.5rem;color:var(--good);font-size:.85rem;font-weight:600">
+        <span style="font-size:1.05rem">✅</span> Cap avís oficial actiu ara en aquesta zona.
+      </div></div>`;
+    $('result').insertAdjacentHTML('afterbegin', html);
+    return;
+  }
   const order={Extreme:3, Severe:2, Moderate:1};
   list.sort((a,b)=>(order[b.sev]||0)-(order[a.sev]||0));
   const fmt=t=>{ const d=new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; };
