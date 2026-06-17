@@ -239,6 +239,14 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .alert-row { display:flex; align-items:flex-start; gap:.6rem; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.3); border-radius:12px; padding:.7rem .9rem; margin-bottom:1.1rem; font-size:.82rem; color:var(--warn); }
 .alert-row .ic { font-size:1.05rem; }
 
+/* ── Avisos oficials ────────────────────────────────────────────────────────── */
+.alert-banner { border-color:rgba(251,191,36,.35); }
+.alert-item { border-left:4px solid var(--warn); background:var(--bg-card); border-radius:8px; padding:.6rem .8rem; margin-bottom:.5rem; }
+.alert-item:last-child { margin-bottom:0; }
+.alert-sev { font-weight:700; font-size:.86rem; }
+.alert-meta { color:var(--text-secondary); font-size:.74rem; margin-top:.2rem; }
+.alert-desc { color:var(--text-primary); font-size:.78rem; margin-top:.35rem; line-height:1.5; }
+
 /* ── Radar de pluja ─────────────────────────────────────────────────────────── */
 #radar-map { width:100%; height:380px; border-radius:12px; overflow:hidden; background:var(--bg-card); position:relative; z-index:0; }
 .radar-controls { display:flex; align-items:center; gap:.6rem; margin-top:.75rem; }
@@ -298,17 +306,38 @@ const RECENT_KEY = 'eltemps_recent';
 const THEME_KEY  = 'eltemps_theme';
 const MAX_RECENT = 8;
 
+/* Proxy CORS de Cloudflare (worker compartit amb Noticies) per als avisos oficials */
+const WORKER_URL = 'https://mecai.oscarbellosido.workers.dev';
+const proxyUrl = u => `${WORKER_URL}/?action=rss&url=${encodeURIComponent(u)}`;
+
+/* Codi de país → feed de Meteoalarm (avisos oficials europeus) */
+const MA_COUNTRY = {
+  ES:'spain', FR:'france', IT:'italy', PT:'portugal', AD:'andorra', GB:'united-kingdom',
+  IE:'ireland', NL:'netherlands', BE:'belgium', LU:'luxembourg', DE:'germany', CH:'switzerland',
+  AT:'austria', PL:'poland', CZ:'czechia', SK:'slovakia', HU:'hungary', SI:'slovenia', HR:'croatia',
+  RO:'romania', BG:'bulgaria', GR:'greece', NO:'norway', SE:'sweden', FI:'finland', DK:'denmark',
+  EE:'estonia', LV:'latvia', LT:'lithuania', IS:'iceland', RS:'serbia', MT:'malta', CY:'cyprus',
+};
+/* Nivell d'avís Meteoalarm → color i etiqueta */
+const SEV = {
+  Moderate: { lbl:'Groc',     col:'#fbbf24', ic:'🟡' },
+  Severe:   { lbl:'Taronja',  col:'#fb923c', ic:'🟠' },
+  Extreme:  { lbl:'Vermell',  col:'#f87171', ic:'🔴' },
+};
+/* Idioma per resoldre els noms de província perquè coincideixin amb el feed del país */
+const CC_LANG = { FR:'fr', IT:'it', PT:'pt', DE:'de', GB:'en', IE:'en', NL:'nl', BE:'fr', CH:'de' };
+
 /* Ciutats catalanes d'accés ràpid */
 const QUICK_CITIES = [
-  { name:'Barcelona',  lat:41.3888, lon:2.1590,  region:'Barcelonès' },
-  { name:'Girona',     lat:41.9794, lon:2.8214,  region:'Gironès' },
-  { name:'Lleida',     lat:41.6176, lon:0.6200,  region:'Segrià' },
-  { name:'Tarragona',  lat:41.1189, lon:1.2445,  region:'Tarragonès' },
-  { name:'Sabadell',   lat:41.5463, lon:2.1086,  region:'Vallès Occidental' },
-  { name:'Manresa',    lat:41.7230, lon:1.8268,  region:'Bages' },
-  { name:'Vic',        lat:41.9301, lon:2.2549,  region:'Osona' },
-  { name:'la Seu d\'Urgell', lat:42.3582, lon:1.4593, region:'Alt Urgell' },
-  { name:'Andorra',    lat:42.5063, lon:1.5218,  region:'Andorra' },
+  { name:'Barcelona',  lat:41.3888, lon:2.1590,  region:'Barcelonès',         cc:'ES', admin2:'Província de Barcelona' },
+  { name:'Girona',     lat:41.9794, lon:2.8214,  region:'Gironès',            cc:'ES', admin2:'Província de Girona' },
+  { name:'Lleida',     lat:41.6176, lon:0.6200,  region:'Segrià',             cc:'ES', admin2:'Província de Lleida' },
+  { name:'Tarragona',  lat:41.1189, lon:1.2445,  region:'Tarragonès',         cc:'ES', admin2:'Província de Tarragona' },
+  { name:'Sabadell',   lat:41.5463, lon:2.1086,  region:'Vallès Occidental',  cc:'ES', admin2:'Província de Barcelona' },
+  { name:'Manresa',    lat:41.7230, lon:1.8268,  region:'Bages',              cc:'ES', admin2:'Província de Barcelona' },
+  { name:'Vic',        lat:41.9301, lon:2.2549,  region:'Osona',              cc:'ES', admin2:'Província de Barcelona' },
+  { name:'la Seu d\'Urgell', lat:42.3582, lon:1.4593, region:'Alt Urgell',    cc:'ES', admin2:'Província de Lleida' },
+  { name:'Andorra',    lat:42.5063, lon:1.5218,  region:'Andorra',            cc:'AD', admin2:'Andorra' },
 ];
 
 /* Models a comparar (clau Open-Meteo → etiqueta + organisme) */
@@ -413,7 +442,8 @@ async function fetchSuggest(name){
     if (!seen.has(o.id)) {
       seen.add(o.id);
       results.push({ name:o.name, region:[o.admin2,o.admin1].filter(Boolean).join(', '),
-        country:o.country, lat:o.latitude, lon:o.longitude, cc:o.country_code, _pop:o.population||0 });
+        country:o.country, lat:o.latitude, lon:o.longitude, cc:o.country_code,
+        admin1:o.admin1, admin2:o.admin2, _pop:o.population||0 });
     }
   }
   return results.sort((a,b) => b._pop - a._pop).slice(0, 6);
@@ -470,12 +500,17 @@ function useMyLocation(){
   navigator.geolocation.getCurrentPosition(
     async pos=>{
       const lat=pos.coords.latitude, lon=pos.coords.longitude;
-      let name='La meva ubicació', region='';
+      const loc={ name:'La meva ubicació', region:'', lat, lon };
       try{
-        const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?latitude=${lat}&longitude=${lon}&count=1&language=ca`,{signal:AbortSignal.timeout(6000)});
-        if(r.ok){ const j=await r.json(); const o=(j.results||[])[0]; if(o){ name=o.name; region=[o.admin2,o.admin1].filter(Boolean).join(', '); } }
+        const r=await fetch(proxyUrl(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=10&accept-language=ca`),{signal:AbortSignal.timeout(8000)});
+        if(r.ok){ const j=await r.json(); const a=j.address||{};
+          loc.name = a.city||a.town||a.village||a.municipality||j.name||loc.name;
+          loc.cc = (a.country_code||'').toUpperCase();
+          loc.admin1 = a.state; loc.admin2 = a.county||a.province||a.state_district;
+          loc.region = [loc.admin2,loc.admin1].filter(Boolean).join(', ');
+        }
       }catch{}
-      loadWeather({ name, region, lat, lon });
+      loadWeather(loc);
     },
     ()=> showStatus('No s\'ha pogut obtenir la ubicació (permís denegat?).','error'),
     { timeout:9000, maximumAge:300000 }
@@ -500,6 +535,7 @@ async function loadWeather(loc){
     pushRecent(loc);
     $('result').classList.add('show');
     window.scrollTo({ top:0, behavior:'smooth' });
+    loadAlerts(loc, gen);   // avisos oficials (asíncron, no bloqueja el temps)
   }catch(e){
     if(gen!==loadGen) return;
     showStatus('No s\'han pogut carregar les dades meteorològiques. Comprova la connexió i torna-ho a provar.','error');
@@ -533,6 +569,80 @@ async function fetchAir(loc){
     + `&current=european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone&timezone=auto`;
   const r=await fetch(url,{signal:AbortSignal.timeout(10000)});
   if(!r.ok) throw new Error('air'); return r.json();
+}
+
+/* ── Avisos oficials (Meteoalarm via proxy Cloudflare) ───────────────────────── */
+function normTxt(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function alertStrip(s){ if(!s) return null; const p=String(s).split(/\s+(?:de|del|dels|di|d'|della|delle|du|des)\s+/i); return p[p.length-1].trim(); }
+function alertTokens(o){
+  const t=[];
+  for(const s of [o.admin2, o.admin1, o.name]){ const v=alertStrip(s); if(v && v.length>=4) t.push(v); }
+  return [...new Set(t)];
+}
+async function fetchOneGeo(name, lat, lon, lang='ca'){
+  const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=10&language=${lang}`,{signal:AbortSignal.timeout(8000)});
+  if(!r.ok) return null; const j=await r.json(); const res=j.results||[]; if(!res.length) return null;
+  if(lat!=null) res.sort((a,b)=>Math.hypot(a.latitude-lat,a.longitude-lon)-Math.hypot(b.latitude-lat,b.longitude-lon));
+  return res[0];
+}
+async function loadAlerts(loc, gen){
+  try{
+    let cc=(loc.cc||'').toUpperCase(), admin1=loc.admin1, admin2=loc.admin2;
+    const named = loc.name && loc.name!=='La meva ubicació';
+    if(cc && cc!=='ES' && cc!=='AD' && named){
+      // Resol els noms administratius en l'idioma del país perquè coincideixin amb el feed
+      try{ const g=await fetchOneGeo(loc.name, loc.lat, loc.lon, CC_LANG[cc]||'en');
+        if(g){ admin1=g.admin1||admin1; admin2=g.admin2||admin2; } }catch{}
+    } else if((!admin2 || !cc) && named){
+      try{ const g=await fetchOneGeo(loc.name, loc.lat, loc.lon, 'ca');
+        if(g){ cc=cc||(g.country_code||'').toUpperCase(); admin1=admin1||g.admin1; admin2=admin2||g.admin2; } }catch{}
+    }
+    const slug=MA_COUNTRY[cc]; if(!slug) return;            // país sense feed → sense avisos
+    const tokens=alertTokens({admin2, admin1, name:loc.name}).map(normTxt);
+    if(!tokens.length) return;
+
+    const r=await fetch(proxyUrl(`https://feeds.meteoalarm.org/api/v1/warnings/feeds-${slug}`),{signal:AbortSignal.timeout(15000)});
+    if(!r.ok) return;
+    const data=await r.json();
+    const now=Date.now(); const found=[]; const seen=new Set();
+    for(const w of (data.warnings||[])){
+      const infos=w.alert?.info||[];
+      const info=infos.find(i=>/^(es|ca|fr|it|pt|de|en)/i.test(i.language||'')) || infos[0];
+      if(!info || info.severity==='Minor') continue;        // descarta nivell verd (informatiu)
+      const areas=(info.area||[]).map(a=>a.areaDesc).filter(Boolean);
+      const matched=areas.filter(a=>{ const na=normTxt(a); return tokens.some(t=>na.includes(t)); });
+      if(!matched.length) continue;
+      const onset=new Date(info.onset||info.effective||w.alert.sent).getTime();
+      const exp=new Date(info.expires||0).getTime();
+      if(!(onset<=now && now<=exp)) continue;
+      const key=(info.event||'')+'|'+matched.join(',');
+      if(seen.has(key)) continue; seen.add(key);
+      found.push({ event:info.event||'Avís meteorològic', sev:info.severity, areas:[...new Set(matched)],
+        onset, exp, instr:info.instruction });
+    }
+    if(gen!==loadGen) return;
+    renderAlerts(found);
+  }catch(e){}
+}
+function renderAlerts(list){
+  const old=$('alertBanner'); if(old) old.remove();
+  if(!list.length) return;
+  const order={Extreme:3, Severe:2, Moderate:1};
+  list.sort((a,b)=>(order[b.sev]||0)-(order[a.sev]||0));
+  const fmt=t=>{ const d=new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; };
+  const rows=list.map(a=>{
+    const s=SEV[a.sev]||SEV.Moderate;
+    return `<div class="alert-item" style="border-left-color:${s.col}">
+      <div class="alert-sev" style="color:${s.col}">${s.ic} ${esc(a.event)}</div>
+      <div class="alert-meta">📍 ${esc(a.areas.join(' · '))}</div>
+      <div class="alert-meta">⏱ Vigent fins ${fmt(a.exp)}</div>
+    </div>`;
+  }).join('');
+  const html=`<div class="card alert-banner" id="alertBanner">
+    <h2><span class="ic">⚠️</span> Avisos oficials <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· Meteoalarm / AEMET</span></h2>
+    ${rows}
+  </div>`;
+  $('result').insertAdjacentHTML('afterbegin', html);
 }
 
 /* ── Render ──────────────────────────────────────────────────────────────────── */

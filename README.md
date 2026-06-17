@@ -87,6 +87,13 @@ Tot ve d'**[Open-Meteo](https://open-meteo.com)** — gratuït i sense clau d'AP
 | Consens multi-model | mateix endpoint amb `&models=...` |
 | Qualitat de l'aire | `air-quality-api.open-meteo.com/v1/air-quality` |
 | Cerca de poblacions | `geocoding-api.open-meteo.com/v1/search` |
+| Avisos oficials | `feeds.meteoalarm.org` (via proxy Cloudflare `mecai`) |
+
+**Avisos oficials:** es llegeix el feed de Meteoalarm del país i es filtra per província
+(camp `admin2` d'Open-Meteo), mostrant només avisos de nivell **groc o superior** vigents
+ara. Com que Meteoalarm bloqueja el CORS, es passa pel **worker de Cloudflare `mecai`**
+(`https://mecai.oscarbellosido.workers.dev/?action=rss&url=…`), el mateix proxy que fa servir
+el projecte **Noticies**. Per editar el worker: fitxer `mecai_worker.js` a la carpeta de Noticies.
 
 **Models usats al consens** (variable `MODELS` dins l'script):
 ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · UKMO · JMA.
@@ -98,7 +105,8 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
-- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent, i avisos (UV, calor, fred, fiabilitat dels models)
+- [x] **Avisos oficials** (Meteoalarm/AEMET) per província, només nivell groc o superior i actius ara — via proxy Cloudflare (worker `mecai`, compartit amb Noticies)
+- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent, sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, fiabilitat dels models)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
 - [x] **Gràfic horari** (corba de temperatura + barres de pluja) a "Pròximes 24 hores"
 - [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃)
@@ -114,7 +122,6 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 
 Coses que es poden incorporar més endavant:
 
-- [ ] **Alertes/avisos oficials** (Meteocat / AEMET / Meteoalarm) per pluja, vent, calor…
 - [ ] **Notificacions** quan es preveu pluja a les pròximes hores (mentre la pestanya és oberta)
 - [ ] **Service worker** per funcionar sense connexió (PWA completa offline)
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
