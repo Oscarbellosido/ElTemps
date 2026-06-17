@@ -18,6 +18,8 @@ dependències. Per provar-ho en local només cal obrir el fitxer amb el navegado
 ```
 Temps/
 ├── index.html      ← l'aplicació sencera (edita aquí)
+├── manifest.json   ← configuració PWA (instal·lable al mòbil)
+├── icon.svg        ← icona de l'app
 ├── README.md       ← aquest document
 └── .gitignore
 ```
@@ -98,9 +100,11 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] Predicció horària (24 h) i diària (7 dies)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
 - [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃)
-- [x] Cerca mundial amb autocompletar + geolocalització
+- [x] **Radar de pluja** (mapa Leaflet + capes de RainViewer)
+- [x] Cerca mundial amb autocompletar (català/castellà) + geolocalització
 - [x] Accés ràpid a ciutats catalanes + històric de cerques recents
-- [x] Tema clar/fosc
+- [x] Tema clar/fosc + disseny responsive per a mòbil
+- [x] **PWA**: icona pròpia i "afegir a la pantalla d'inici" (`manifest.json`)
 
 ---
 
@@ -108,17 +112,16 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 
 Coses que es poden incorporar més endavant:
 
-- [ ] **Radar de pluja** (capa de RainViewer sobre un mapa Leaflet, com al FindBtc no hi és però es pot fer)
 - [ ] **Alertes/avisos oficials** (Meteocat / AEMET / Meteoalarm) per pluja, vent, calor…
 - [ ] **Notificacions** quan es preveu pluja a les pròximes hores (mentre la pestanya és oberta)
+- [ ] **Service worker** per funcionar sense connexió (PWA completa offline)
 - [ ] **Gràfic** de temperatura i precipitació per hores (mini-corba)
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
 - [ ] **Pol·len** i índex de raigs UV detallat (Open-Meteo ho ofereix)
 - [ ] **Comparació de llocs** (veure dos pobles alhora)
 - [ ] **Mode "platja/muntanya"** amb dades d'onatge o neu segons el lloc
 - [ ] **Desar favorits** fixos (a part dels recents)
-- [ ] **PWA / instal·lable** al mòbil amb icona pròpia
-- [ ] **Idiomes** (castellà/anglès) a part del català
+- [ ] **Idioma anglès** a part del català/castellà
 
 > Quan afegeixis una funció nova, marca-la aquí amb `[x]` i mou-la a "Funcions actuals".
 
