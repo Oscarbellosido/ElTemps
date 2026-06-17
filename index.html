@@ -406,7 +406,7 @@ function loadRecent(){ try{ return JSON.parse(localStorage.getItem(RECENT_KEY)||
 function saveRecent(arr){ localStorage.setItem(RECENT_KEY, JSON.stringify(arr.slice(0,MAX_RECENT))); }
 function pushRecent(loc){
   let arr = loadRecent().filter(e => !(Math.abs(e.lat-loc.lat)<0.01 && Math.abs(e.lon-loc.lon)<0.01));
-  arr.unshift({ name:loc.name, region:loc.region||'', lat:loc.lat, lon:loc.lon });
+  arr.unshift({ name:loc.name, region:loc.region||'', lat:loc.lat, lon:loc.lon, cc:loc.cc, admin1:loc.admin1, admin2:loc.admin2 });
   saveRecent(arr); renderRecent();
 }
 function renderRecent(){
@@ -585,19 +585,32 @@ async function fetchOneGeo(name, lat, lon, lang='ca'){
   if(lat!=null) res.sort((a,b)=>Math.hypot(a.latitude-lat,a.longitude-lon)-Math.hypot(b.latitude-lat,b.longitude-lon));
   return res[0];
 }
+/* Geocodificació inversa per coordenades (Nominatim via proxy) en l'idioma indicat */
+async function revGeo(lat, lon, lang='ca'){
+  const t=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=8&accept-language=${lang}`;
+  const r=await fetch(proxyUrl(t),{signal:AbortSignal.timeout(9000)});
+  if(!r.ok) return null; const j=await r.json(); const a=j.address||{};
+  return { cc:(a.country_code||'').toUpperCase(), admin1:a.state||a.region, admin2:a.county||a.province||a.state_district, name:a.city||a.town||a.village||j.name };
+}
 async function loadAlerts(loc, gen){
   try{
-    let cc=(loc.cc||'').toUpperCase(), admin1=loc.admin1, admin2=loc.admin2;
     const named = loc.name && loc.name!=='La meva ubicació';
-    if(cc && cc!=='ES' && cc!=='AD' && named){
-      // Resol els noms administratius en l'idioma del país perquè coincideixin amb el feed
-      try{ const g=await fetchOneGeo(loc.name, loc.lat, loc.lon, CC_LANG[cc]||'en');
-        if(g){ admin1=g.admin1||admin1; admin2=g.admin2||admin2; } }catch{}
-    } else if((!admin2 || !cc) && named){
-      try{ const g=await fetchOneGeo(loc.name, loc.lat, loc.lon, 'ca');
-        if(g){ cc=cc||(g.country_code||'').toUpperCase(); admin1=admin1||g.admin1; admin2=admin2||g.admin2; } }catch{}
+    let cc=(loc.cc||'').toUpperCase();
+    let admin1=loc.admin1, admin2=loc.admin2;
+    // 1) Assegura el codi de país (recents/geolocalització poden no portar-lo)
+    if(!cc){
+      if(named){ try{ const g=await fetchOneGeo(loc.name, loc.lat, loc.lon, 'ca'); if(g){ cc=(g.country_code||'').toUpperCase(); admin1=admin1||g.admin1; admin2=admin2||g.admin2; } }catch{} }
+      if(!cc){ try{ const rg=await revGeo(loc.lat, loc.lon, 'ca'); if(rg){ cc=rg.cc; admin1=admin1||rg.admin1; admin2=admin2||rg.admin2; } }catch{} }
     }
     const slug=MA_COUNTRY[cc]; if(!slug) return;            // país sense feed → sense avisos
+    // 2) Resol la província en l'idioma del feed perquè els noms coincideixin:
+    //    ES/AD via Open-Meteo (nom oficial català, p.ex. "Província de Lleida");
+    //    altres països via Nominatim per coordenades en l'idioma natiu (p.ex. "Pyrénées-Orientales").
+    if(cc==='ES' || cc==='AD'){
+      if(named){ try{ const g=await fetchOneGeo(loc.name, loc.lat, loc.lon, 'ca'); if(g){ if(g.admin2) admin2=g.admin2; if(g.admin1) admin1=g.admin1; } }catch{} }
+    } else {
+      try{ const rg=await revGeo(loc.lat, loc.lon, CC_LANG[cc]||'en'); if(rg){ if(rg.admin2) admin2=rg.admin2; if(rg.admin1) admin1=rg.admin1; } }catch{}
+    }
     const tokens=alertTokens({admin2, admin1, name:loc.name}).map(normTxt);
     if(!tokens.length) return;
 
@@ -605,20 +618,25 @@ async function loadAlerts(loc, gen){
     if(!r.ok) return;
     const data=await r.json();
     const now=Date.now(); const found=[]; const seen=new Set();
+    const LANG_ORDER=['ca','es','fr','it','pt','de','en'];
     for(const w of (data.warnings||[])){
       const infos=w.alert?.info||[];
-      const info=infos.find(i=>/^(es|ca|fr|it|pt|de|en)/i.test(i.language||'')) || infos[0];
-      if(!info || info.severity==='Minor') continue;        // descarta nivell verd (informatiu)
-      const areas=(info.area||[]).map(a=>a.areaDesc).filter(Boolean);
-      const matched=areas.filter(a=>{ const na=normTxt(a); return tokens.some(t=>na.includes(t)); });
-      if(!matched.length) continue;
-      const onset=new Date(info.onset||info.effective||w.alert.sent).getTime();
-      const exp=new Date(info.expires||0).getTime();
-      if(!(onset<=now && now<=exp)) continue;
-      const key=(info.event||'')+'|'+matched.join(',');
-      if(seen.has(key)) continue; seen.add(key);
-      found.push({ event:info.event||'Avís meteorològic', sev:info.severity, areas:[...new Set(matched)],
-        onset, exp, instr:info.instruction });
+      if(!infos.length) continue;
+      // Tria un sol idioma per evitar duplicats; recorre TOTS els blocs info (períodes/severitats)
+      let il=null; for(const code of LANG_ORDER){ if(infos.some(i=>(i.language||'').toLowerCase().startsWith(code))){ il=code; break; } }
+      const langInfos = il ? infos.filter(i=>(i.language||'').toLowerCase().startsWith(il)) : infos;
+      for(const info of langInfos){
+        if(info.severity==='Minor') continue;               // descarta nivell verd (informatiu)
+        const areas=(info.area||[]).map(a=>a.areaDesc).filter(Boolean);
+        const matched=areas.filter(a=>{ const na=normTxt(a); return tokens.some(t=>na.includes(t)); });
+        if(!matched.length) continue;
+        const onset=new Date(info.onset||info.effective||w.alert.sent).getTime();
+        const exp=new Date(info.expires||0).getTime();
+        if(!(onset<=now && now<=exp)) continue;             // només vigents ara
+        const key=info.severity+'|'+(info.event||'')+'|'+matched.join(',');
+        if(seen.has(key)) continue; seen.add(key);
+        found.push({ event:info.event||'Avís meteorològic', sev:info.severity, areas:[...new Set(matched)], onset, exp });
+      }
     }
     if(gen!==loadGen) return;
     renderAlerts(found, true);
