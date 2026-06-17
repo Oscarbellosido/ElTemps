@@ -259,13 +259,13 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .chip.fav { border-color:rgba(251,191,36,.4); }
 .chip .x { margin-left:.3rem; opacity:.55; }
 .chip .x:hover { opacity:1; color:var(--bad); }
-.now-loc-row { display:flex; align-items:flex-start; gap:.5rem; margin-bottom:.15rem; }
-.now-loc-row .grow { flex:1; min-width:0; }
-.now-actions { display:flex; gap:.4rem; flex-shrink:0; }
-.icon-btn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:.35rem .6rem; font-size:1rem; cursor:pointer; line-height:1; transition:all .15s; }
+.now-loc-row { display:flex; align-items:flex-start; gap:.5rem; margin-bottom:.15rem; flex-wrap:wrap; }
+.now-loc-row .grow { flex:1; min-width:55%; }
+.now-actions { display:flex; gap:.4rem; flex-shrink:0; margin-left:auto; }
+.icon-btn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:.4rem .7rem; font-size:.8rem; font-weight:600; cursor:pointer; line-height:1; transition:all .15s; white-space:nowrap; }
 .icon-btn:hover { color:var(--text-primary); border-color:var(--accent); }
-.icon-btn.on { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.1); }
-.now-fresh { color:var(--text-secondary); }
+.icon-btn.on { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.12); }
+.now-fresh { color:var(--accent); font-weight:600; }
 .aq-subhead { color:var(--text-secondary); font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; margin:1rem 0 .5rem; font-weight:700; }
 
 @media (max-width:560px){
@@ -321,7 +321,7 @@ const RECENT_KEY = 'eltemps_recent';
 const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const BUILD_DATE  = '2026-06-17';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -466,7 +466,7 @@ function delFav(i){ const a=loadFav(); a.splice(i,1); saveFav(a); renderFav(); u
 function updateFavBtn(){
   const b=$('favBtn'); if(!b||!currentLoc) return;
   const on=isFav(currentLoc);
-  b.classList.toggle('on',on); b.textContent=on?'★':'☆';
+  b.classList.toggle('on',on); b.textContent=on?'★ Desat':'☆ Desa';
   b.title=on?'Treure dels favorits':'Afegir als favorits';
 }
 
@@ -477,14 +477,14 @@ function shareCurrent(){
   let text='El temps a '+currentLoc.name;
   if(currentFc?.daily){ const d=currentFc.daily; const desc=wmo(d.weather_code[0])[1]; text=`${currentLoc.name}: ${desc.toLowerCase()}, ${Math.round(d.temperature_2m_min[0])}–${Math.round(d.temperature_2m_max[0])}°C`; }
   if(navigator.share){ navigator.share({ title:'El Temps · '+currentLoc.name, text, url }).catch(()=>{}); }
-  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>{ const b=$('shareBtn'); if(b){ const o=b.textContent; b.textContent='✓'; setTimeout(()=>b.textContent=o,1500); } }); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>{ const b=$('shareBtn'); if(b){ const o=b.textContent; b.textContent='✓ Copiat'; setTimeout(()=>b.textContent=o,1500); } }); }
 }
 
 /* ── Frescor de les dades + auto-refresc ─────────────────────────────────────── */
 function updateFreshness(){
   const el=$('freshness'); if(!el||!lastLoadTime) return;
   const mins=Math.floor((Date.now()-lastLoadTime)/60000);
-  el.textContent = mins<=0 ? 'actualitzat ara' : (mins===1 ? 'actualitzat fa 1 min' : `actualitzat fa ${mins} min`);
+  el.textContent = '🔄 ' + (mins<=0 ? 'actualitzat ara' : (mins===1 ? 'actualitzat fa 1 min' : `actualitzat fa ${mins} min`));
 }
 function startTimers(){
   if(!freshTimer) freshTimer=setInterval(updateFreshness, 30000);
@@ -929,8 +929,8 @@ function renderNow(loc, fc){
         <div class="now-time">${timeStr} · hora local (${tz}) · <span id="freshness" class="now-fresh"></span></div>
       </div>
       <div class="now-actions">
-        <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆</button>
-        <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗</button>
+        <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
+        <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
       </div>
     </div>
     <div class="now-main">

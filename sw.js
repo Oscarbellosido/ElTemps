@@ -8,7 +8,7 @@
    - Peticions externes (Open-Meteo, Meteoalarm, Nominatim, Leaflet, tiles):
      NO es toquen → sempre van a la xarxa (dades sempre fresques).
    ════════════════════════════════════════════════════════════════════════════ */
-const CACHE = 'eltemps-v2';
+const CACHE = 'eltemps-v3';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
