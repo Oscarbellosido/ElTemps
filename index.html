@@ -255,6 +255,19 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .radar-time { font-size:.78rem; color:var(--text-secondary); flex:0 0 auto; min-width:10rem; }
 .radar-nowcast { color:var(--accent); }
 
+/* ── Favorits / compartir / frescor ─────────────────────────────────────────── */
+.chip.fav { border-color:rgba(251,191,36,.4); }
+.chip .x { margin-left:.3rem; opacity:.55; }
+.chip .x:hover { opacity:1; color:var(--bad); }
+.now-loc-row { display:flex; align-items:flex-start; gap:.5rem; margin-bottom:.15rem; }
+.now-loc-row .grow { flex:1; min-width:0; }
+.now-actions { display:flex; gap:.4rem; flex-shrink:0; }
+.icon-btn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:.35rem .6rem; font-size:1rem; cursor:pointer; line-height:1; transition:all .15s; }
+.icon-btn:hover { color:var(--text-primary); border-color:var(--accent); }
+.icon-btn.on { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.1); }
+.now-fresh { color:var(--text-secondary); }
+.aq-subhead { color:var(--text-secondary); font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; margin:1rem 0 .5rem; font-weight:700; }
+
 @media (max-width:560px){
   .now-temp { font-size:3rem; }
   .now-icon { font-size:3.4rem; }
@@ -284,6 +297,7 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   </div>
 
   <div class="chips-row" id="cityChips"></div>
+  <div class="chips-row" id="favChips" style="display:none"></div>
   <div class="chips-row" id="recentChips" style="display:none"></div>
 
   <div id="status"></div>
@@ -293,7 +307,8 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
     Dades de <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> ·
     Models: ECMWF · ICON · Météo-France AROME/ARPEGE · GFS · GEM · UKMO · JMA ·
     Qualitat de l'aire i geocodificació Open-Meteo.<br>
-    Predicció orientativa. El consens multi-model indica el grau d'acord entre serveis meteorològics.
+    Predicció orientativa. El consens multi-model indica el grau d'acord entre serveis meteorològics.<br>
+    <span id="ver" style="opacity:.7"></span>
   </p>
 </div>
 
@@ -303,8 +318,15 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
    El Temps — predicció multi-model amb Open-Meteo
    ════════════════════════════════════════════════════════════════════════════ */
 const RECENT_KEY = 'eltemps_recent';
+const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const MAX_RECENT = 8;
+const APP_VERSION = '1.1.0';
+const BUILD_DATE  = '2026-06-17';
+const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
+
+/* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
+let currentLoc = null, currentFc = null, lastLoadTime = 0, refreshTimer = null, freshTimer = null;
 
 /* Proxy CORS de Cloudflare (worker compartit amb Noticies) per als avisos oficials */
 const WORKER_URL = 'https://mecai.oscarbellosido.workers.dev';
@@ -420,6 +442,55 @@ function renderRecent(){
 function goRecent(i){ const e=loadRecent()[i]; if(e) loadWeather(e); }
 function clearRecent(){ localStorage.removeItem(RECENT_KEY); renderRecent(); }
 
+/* ── Favorits (localStorage) ─────────────────────────────────────────────────── */
+function loadFav(){ try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); }catch{ return []; } }
+function saveFav(a){ localStorage.setItem(FAV_KEY, JSON.stringify(a.slice(0,12))); }
+function sameLoc(a,b){ return a&&b && Math.abs(a.lat-b.lat)<0.02 && Math.abs(a.lon-b.lon)<0.02; }
+function isFav(loc){ return loadFav().some(e=>sameLoc(e,loc)); }
+function toggleFav(){
+  if(!currentLoc) return;
+  const a=loadFav(); const i=a.findIndex(e=>sameLoc(e,currentLoc));
+  if(i>=0) a.splice(i,1);
+  else a.unshift({ name:currentLoc.name, region:currentLoc.region||'', lat:currentLoc.lat, lon:currentLoc.lon, cc:currentLoc.cc, admin1:currentLoc.admin1, admin2:currentLoc.admin2 });
+  saveFav(a); renderFav(); updateFavBtn();
+}
+function renderFav(){
+  const a=loadFav(); const box=$('favChips');
+  if(!a.length){ box.style.display='none'; return; }
+  box.style.display='flex';
+  box.innerHTML = `<span class="chips-label">⭐ Favorits</span>` +
+    a.map((e,i)=>`<span class="chip fav" onclick="goFav(${i})">${esc(e.name)}<span class="x" onclick="event.stopPropagation();delFav(${i})">✕</span></span>`).join('');
+}
+function goFav(i){ const e=loadFav()[i]; if(e) loadWeather(e); }
+function delFav(i){ const a=loadFav(); a.splice(i,1); saveFav(a); renderFav(); updateFavBtn(); }
+function updateFavBtn(){
+  const b=$('favBtn'); if(!b||!currentLoc) return;
+  const on=isFav(currentLoc);
+  b.classList.toggle('on',on); b.textContent=on?'★':'☆';
+  b.title=on?'Treure dels favorits':'Afegir als favorits';
+}
+
+/* ── Compartir (Web Share / còpia d'enllaç) ──────────────────────────────────── */
+function shareCurrent(){
+  if(!currentLoc) return;
+  const url=location.origin+location.pathname+`?lat=${currentLoc.lat}&lon=${currentLoc.lon}&name=${encodeURIComponent(currentLoc.name)}`;
+  let text='El temps a '+currentLoc.name;
+  if(currentFc?.daily){ const d=currentFc.daily; const desc=wmo(d.weather_code[0])[1]; text=`${currentLoc.name}: ${desc.toLowerCase()}, ${Math.round(d.temperature_2m_min[0])}–${Math.round(d.temperature_2m_max[0])}°C`; }
+  if(navigator.share){ navigator.share({ title:'El Temps · '+currentLoc.name, text, url }).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>{ const b=$('shareBtn'); if(b){ const o=b.textContent; b.textContent='✓'; setTimeout(()=>b.textContent=o,1500); } }); }
+}
+
+/* ── Frescor de les dades + auto-refresc ─────────────────────────────────────── */
+function updateFreshness(){
+  const el=$('freshness'); if(!el||!lastLoadTime) return;
+  const mins=Math.floor((Date.now()-lastLoadTime)/60000);
+  el.textContent = mins<=0 ? 'actualitzat ara' : (mins===1 ? 'actualitzat fa 1 min' : `actualitzat fa ${mins} min`);
+}
+function startTimers(){
+  if(!freshTimer) freshTimer=setInterval(updateFreshness, 30000);
+  if(!refreshTimer) refreshTimer=setInterval(()=>{ if(currentLoc) loadWeather(currentLoc, {silent:true}); }, REFRESH_MS);
+}
+
 function renderCityChips(){
   $('cityChips').innerHTML = `<span class="chips-label">Catalunya</span>` +
     QUICK_CITIES.map((c,i)=>`<span class="chip" onclick="goCity(${i})">${esc(c.name)}</span>`).join('');
@@ -519,26 +590,30 @@ function useMyLocation(){
 
 /* ── Càrrega principal del temps ─────────────────────────────────────────────── */
 let loadGen=0;
-async function loadWeather(loc){
+async function loadWeather(loc, opts={}){
+  const silent = !!opts.silent;
   const gen=++loadGen;
+  currentLoc=loc;
   closeSuggest();
-  $('result').classList.remove('show');
-  showStatus(`<span class="spinner"></span>Carregant el temps a ${esc(loc.name)}…`,'loading');
+  if(!silent){
+    $('result').classList.remove('show');
+    showStatus(`<span class="spinner"></span>Carregant el temps a ${esc(loc.name)}…`,'loading');
+  }
   try{
-    const [fc, models, air] = await Promise.allSettled([
-      fetchForecast(loc), fetchModels(loc), fetchAir(loc)
+    const [fc, models, air, marine] = await Promise.allSettled([
+      fetchForecast(loc), fetchModels(loc), fetchAir(loc), fetchMarine(loc)
     ]);
     if(gen!==loadGen) return;
     if(fc.status!=='fulfilled') throw new Error('forecast');
-    hideStatus();
-    render(loc, fc.value, models.status==='fulfilled'?models.value:null, air.status==='fulfilled'?air.value:null);
-    pushRecent(loc);
-    $('result').classList.add('show');
-    window.scrollTo({ top:0, behavior:'smooth' });
+    if(!silent) hideStatus();
+    currentFc = fc.value; lastLoadTime = Date.now();
+    render(loc, fc.value, models.status==='fulfilled'?models.value:null, air.status==='fulfilled'?air.value:null, marine.status==='fulfilled'?marine.value:null);
+    if(!silent){ pushRecent(loc); $('result').classList.add('show'); window.scrollTo({ top:0, behavior:'smooth' }); }
+    updateFavBtn(); updateFreshness();
     loadAlerts(loc, gen);   // avisos oficials (asíncron, no bloqueja el temps)
   }catch(e){
     if(gen!==loadGen) return;
-    showStatus('No s\'han pogut carregar les dades meteorològiques. Comprova la connexió i torna-ho a provar.','error');
+    if(!silent) showStatus('No s\'han pogut carregar les dades meteorològiques. Comprova la connexió i torna-ho a provar.','error');
   }
 }
 
@@ -546,13 +621,20 @@ async function fetchForecast(loc){
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}`
     + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,`
     + `cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m`
-    + `&hourly=temperature_2m,precipitation_probability,weather_code,is_day`
+    + `&hourly=temperature_2m,precipitation_probability,weather_code,is_day,freezing_level_height,snow_depth`
     + `&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_sum,`
     + `precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,`
-    + `uv_index_max,sunrise,sunset`
+    + `uv_index_max,sunrise,sunset,snowfall_sum`
     + `&timezone=auto&forecast_days=7`;
   const r=await fetch(url,{signal:AbortSignal.timeout(12000)});
   if(!r.ok) throw new Error('forecast'); return r.json();
+}
+
+async function fetchMarine(loc){
+  const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${loc.lat}&longitude=${loc.lon}`
+    + `&current=wave_height,wave_period,wave_direction,sea_surface_temperature&timezone=auto`;
+  const r=await fetch(url,{signal:AbortSignal.timeout(10000)});
+  if(!r.ok) throw new Error('marine'); return r.json();
 }
 
 async function fetchModels(loc){
@@ -566,7 +648,8 @@ async function fetchModels(loc){
 
 async function fetchAir(loc){
   const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${loc.lat}&longitude=${loc.lon}`
-    + `&current=european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone&timezone=auto`;
+    + `&current=european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone,`
+    + `alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto`;
   const r=await fetch(url,{signal:AbortSignal.timeout(10000)});
   if(!r.ok) throw new Error('air'); return r.json();
 }
@@ -672,12 +755,13 @@ function renderAlerts(list, checked){
 }
 
 /* ── Render ──────────────────────────────────────────────────────────────────── */
-function render(loc, fc, models, air){
+function render(loc, fc, models, air, marine){
   const html = [
     renderSummary(loc, fc, models, air),
     renderNow(loc, fc),
     renderHourly(fc),
     renderDaily(fc),
+    renderMarineMountain(fc, marine),
     renderConsensus(models),
     renderAir(air),
     renderRadar(),
@@ -685,6 +769,33 @@ function render(loc, fc, models, air){
   $('result').innerHTML = html;
   if(models) wireConsensus(models);
   initRadar(loc);
+}
+
+/* ── Mar i muntanya ──────────────────────────────────────────────────────────── */
+function renderMarineMountain(fc, marine){
+  const stats=[];
+  const mc=marine?.current;
+  if(mc && mc.wave_height!=null){
+    stats.push(['🌊 Onatge', `${r1(mc.wave_height)} <small>m</small> ${mc.wave_direction!=null?compass(mc.wave_direction):''}`]);
+    if(mc.wave_period!=null) stats.push(['⏱️ Període onatge', `${r1(mc.wave_period)} <small>s</small>`]);
+    if(mc.sea_surface_temperature!=null) stats.push(['🌡️ Temp. del mar', `${Math.round(mc.sea_surface_temperature)}<small>°C</small>`]);
+  }
+  const h=fc.hourly;
+  if(h?.time){
+    const nowIso=fc.current.time.slice(0,13);
+    let s=h.time.findIndex(t=>t.slice(0,13)===nowIso); if(s<0) s=0;
+    const fl=h.freezing_level_height?.[s];
+    if(fl!=null) stats.push(['🧊 Cota de glaçada', `${Math.round(fl)} <small>m</small>`]);
+    const sd=h.snow_depth?.[s];
+    if(sd!=null && sd>0.005) stats.push(['❄️ Gruix de neu', `${Math.round(sd*100)} <small>cm</small>`]);
+  }
+  const snowSum=(fc.daily?.snowfall_sum||[]).reduce((a,b)=>a+(b||0),0);
+  if(snowSum>0.1) stats.push(['🌨️ Neu prevista (7 dies)', `${r1(snowSum)} <small>cm</small>`]);
+  if(!stats.length) return '';
+  const cells=stats.map(([l,v])=>`<div class="stat"><div class="lbl">${l}</div><div class="val">${v}</div></div>`).join('');
+  return `<div class="card"><h2><span class="ic">🏔️</span> Mar i muntanya</h2>
+    <div class="now-stats">${cells}</div>
+    <div class="card-note">Onatge i temperatura del mar (litoral) · cota de glaçada i neu (muntanya).</div></div>`;
 }
 
 /* ── Resum del dia (llenguatge planer) ───────────────────────────────────────── */
@@ -812,8 +923,16 @@ function renderNow(loc, fc){
   ].map(([l,v])=>`<div class="stat"><div class="lbl">${l}</div><div class="val">${v}</div></div>`).join('');
 
   return `<div class="now-hero">
-    <div class="now-loc"><span class="city">${esc(loc.name)}</span>${region?`<span class="region">${esc(region)}</span>`:''}</div>
-    <div class="now-time">${timeStr} · hora local (${tz})</div>
+    <div class="now-loc-row">
+      <div class="grow">
+        <div class="now-loc"><span class="city">${esc(loc.name)}</span>${region?`<span class="region">${esc(region)}</span>`:''}</div>
+        <div class="now-time">${timeStr} · hora local (${tz}) · <span id="freshness" class="now-fresh"></span></div>
+      </div>
+      <div class="now-actions">
+        <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆</button>
+        <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗</button>
+      </div>
+    </div>
     <div class="now-main">
       <div class="now-icon">${icon}</div>
       <div class="now-temp">${t}<span class="deg">°C</span></div>
@@ -1018,6 +1137,14 @@ function aqiCat(aqi){
   if(aqi<=100) return ['Molt dolenta','var(--bad)'];
   return ['Extrema','#c026d3'];
 }
+function pollenCat(v){
+  if(v==null) return ['—','var(--text-secondary)'];
+  if(v<1)    return ['Nul','var(--text-secondary)'];
+  if(v<=15)  return ['Baix','var(--good)'];
+  if(v<=50)  return ['Moderat','var(--warn)'];
+  if(v<=150) return ['Alt','var(--warm)'];
+  return ['Molt alt','var(--bad)'];
+}
 function renderAir(air){
   if(!air||!air.current) return '';
   const c=air.current;
@@ -1033,9 +1160,22 @@ function renderAir(air){
       <div class="val" ${col?`style="color:${col}"`:''}>${v}<span class="unit"> ${u}</span></div>
       ${cat?`<div class="cat" style="color:${col}">${cat}</div>`:''}
     </div>`).join('');
+
+  // Pol·len (només a Europa; si tots són nuls, no es mostra)
+  const POLLEN=[['grass_pollen','Gramínies'],['olive_pollen','Olivera'],['birch_pollen','Bedoll'],['alder_pollen','Vern'],['mugwort_pollen','Artemísia'],['ragweed_pollen','Ambròsia']];
+  const pollenCells=POLLEN.filter(([k])=>c[k]!=null).map(([k,name])=>{
+    const v=c[k], [pc,pcol]=pollenCat(v);
+    return `<div class="aq-cell"><div class="lbl">${name}</div>
+      <div class="val" style="color:${pcol}">${r1(v)}<span class="unit"> g/m³</span></div>
+      <div class="cat" style="color:${pcol}">${pc}</div></div>`;
+  }).join('');
+  const pollenBlock = pollenCells
+    ? `<div class="aq-subhead">🌾 Pol·len</div><div class="aq-grid">${pollenCells}</div>` : '';
+
   return `<div class="card"><h2><span class="ic">🌫️</span> Qualitat de l'aire</h2>
     <div class="aq-grid">${cells}</div>
-    <div class="card-note">Índex europeu de qualitat de l'aire (EAQI). Valors més baixos = aire més net.</div></div>`;
+    ${pollenBlock}
+    <div class="card-note">Índex europeu de qualitat de l'aire (EAQI). Valors més baixos = aire més net.${pollenBlock?' Pol·len en grans/m³.':''}</div></div>`;
 }
 
 /* ── Radar de pluja (RainViewer + Leaflet) ──────────────────────────────────── */
@@ -1131,10 +1271,20 @@ function toggleRadarPlay(){
 (function init(){
   applyTheme(localStorage.getItem(THEME_KEY) || (window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark'));
   renderCityChips();
+  renderFav();
   renderRecent();
-  const recent=loadRecent();
-  if(recent.length) loadWeather(recent[0]);
-  else loadWeather(QUICK_CITIES[0]); // Barcelona per defecte
+  const v=$('ver'); if(v) v.textContent=`El Temps v${APP_VERSION} · ${BUILD_DATE}`;
+  startTimers();
+  // Enllaç compartit: ?lat=..&lon=..&name=..
+  const p=new URLSearchParams(location.search);
+  const plat=parseFloat(p.get('lat')), plon=parseFloat(p.get('lon'));
+  if(!isNaN(plat) && !isNaN(plon)){
+    loadWeather({ name:p.get('name')||'Ubicació compartida', lat:plat, lon:plon });
+  } else {
+    const recent=loadRecent();
+    if(recent.length) loadWeather(recent[0]);
+    else loadWeather(QUICK_CITIES[0]); // Barcelona per defecte
+  }
 })();
 
 /* ── PWA: registre del service worker (instal·lable + offline) ───────────────── */

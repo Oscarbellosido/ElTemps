@@ -112,10 +112,13 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent, sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, fiabilitat dels models)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
 - [x] **Gràfic horari** (corba de temperatura + barres de pluja) a "Pròximes 24 hores"
-- [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃)
+- [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃) **+ pol·len** (gramínies, olivera, bedoll…)
+- [x] **Mar i muntanya**: onatge i temperatura del mar (litoral) + cota de glaçada i neu (muntanya)
 - [x] **Radar de pluja** (mapa Leaflet + capes de RainViewer)
 - [x] Cerca mundial amb autocompletar (català/castellà) + geolocalització
-- [x] Accés ràpid a ciutats catalanes + històric de cerques recents
+- [x] Accés ràpid a ciutats catalanes + **favorits** + històric de cerques recents
+- [x] **Compartir** (Web Share) amb enllaços directes (`?lat=&lon=&name=`)
+- [x] **Frescor de dades**: refresc automàtic cada 10 min, "actualitzat fa X min" i número de versió visible
 - [x] Tema clar/fosc + disseny responsive per a mòbil
 - [x] **PWA instal·lable** a Android/escriptori (manifest + service worker + icones PNG): botó "Instal·la l'aplicació", funciona offline (la carcassa) i s'actualitza sola
 
@@ -127,10 +130,7 @@ Coses que es poden incorporar més endavant:
 
 - [ ] **Notificacions** quan es preveu pluja a les pròximes hores (mentre la pestanya és oberta)
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
-- [ ] **Pol·len** i índex de raigs UV detallat (Open-Meteo ho ofereix)
 - [ ] **Comparació de llocs** (veure dos pobles alhora)
-- [ ] **Mode "platja/muntanya"** amb dades d'onatge o neu segons el lloc
-- [ ] **Desar favorits** fixos (a part dels recents)
 - [ ] **Idioma anglès** a part del català/castellà
 
 > Quan afegeixis una funció nova, marca-la aquí amb `[x]` i mou-la a "Funcions actuals".
