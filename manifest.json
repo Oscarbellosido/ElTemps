@@ -20,9 +20,9 @@
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "Barcelona", "short_name": "Barcelona", "url": "./?lat=41.3888&lon=2.1590&name=Barcelona" },
-    { "name": "Girona", "short_name": "Girona", "url": "./?lat=41.9794&lon=2.8214&name=Girona" },
-    { "name": "Lleida", "short_name": "Lleida", "url": "./?lat=41.6176&lon=0.6200&name=Lleida" },
-    { "name": "Tarragona", "short_name": "Tarragona", "url": "./?lat=41.1189&lon=1.2445&name=Tarragona" }
+    { "name": "Barcelona", "short_name": "Barcelona", "url": "./?lat=41.3888&lon=2.1590&name=Barcelona", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Girona", "short_name": "Girona", "url": "./?lat=41.9794&lon=2.8214&name=Girona", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Lleida", "short_name": "Lleida", "url": "./?lat=41.6176&lon=0.6200&name=Lleida", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Tarragona", "short_name": "Tarragona", "url": "./?lat=41.1189&lon=1.2445&name=Tarragona", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }
