@@ -206,7 +206,7 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   border:1px solid var(--border); border-radius:18px; padding:1.3rem 1.5rem; margin-bottom:1.1rem;
   transition:background-color .3s ease;
 }
-.sum-head { display:flex; align-items:center; gap:.85rem; margin-bottom:.75rem; }
+.sum-head { display:flex; align-items:center; gap:.85rem; margin-bottom:.75rem; flex-wrap:wrap; }
 .sum-icon { font-size:2.7rem; line-height:1; }
 .sum-title { font-size:1.05rem; font-weight:700; }
 .sum-sub { color:var(--text-secondary); font-size:.78rem; }
@@ -321,7 +321,7 @@ const RECENT_KEY = 'eltemps_recent';
 const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.1.3';
+const APP_VERSION = '1.1.4';
 const BUILD_DATE  = '2026-06-17';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -887,7 +887,11 @@ function renderSummary(loc, fc, models, air){
   return `<div class="summary-card">
     <div class="sum-head">
       <span class="sum-icon">${icon}</span>
-      <div><div class="sum-title">Resum d'avui a ${esc(loc.name)}</div><div class="sum-sub">${sub}</div></div>
+      <div style="flex:1;min-width:0"><div class="sum-title">Resum d'avui a ${esc(loc.name)}</div><div class="sum-sub">${sub}</div></div>
+      <div class="now-actions">
+        <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
+        <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
+      </div>
     </div>
     <p class="sum-text">${txt}</p>
     <div class="sum-tags">${tagsHtml}</div>
@@ -923,16 +927,8 @@ function renderNow(loc, fc){
   ].map(([l,v])=>`<div class="stat"><div class="lbl">${l}</div><div class="val">${v}</div></div>`).join('');
 
   return `<div class="now-hero">
-    <div class="now-loc-row">
-      <div class="grow">
-        <div class="now-loc"><span class="city">${esc(loc.name)}</span>${region?`<span class="region">${esc(region)}</span>`:''}</div>
-        <div class="now-time">${timeStr} · hora local (${tz}) · <span id="freshness" class="now-fresh"></span></div>
-      </div>
-      <div class="now-actions">
-        <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
-        <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
-      </div>
-    </div>
+    <div class="now-loc"><span class="city">${esc(loc.name)}</span>${region?`<span class="region">${esc(region)}</span>`:''}</div>
+    <div class="now-time">${timeStr} · hora local (${tz}) · <span id="freshness" class="now-fresh"></span></div>
     <div class="now-main">
       <div class="now-icon">${icon}</div>
       <div class="now-temp">${t}<span class="deg">°C</span></div>
