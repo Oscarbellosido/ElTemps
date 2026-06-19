@@ -337,7 +337,7 @@ const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.2.3';
 const BUILD_DATE  = '2026-06-17';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1360,33 +1360,37 @@ function renderFun(loc, fc){
 
   let emoji, msgs;
   if(tmax>=34){ emoji='🥵'; msgs=[
-    "Calor a tope! Posa\'t poca roba, beu aigua a galet i no facis el préssec al sol del migdia.",
+    "Calor a tope! Posa't poca roba, beu aigua a galet i no facis el préssec al sol del migdia.",
     "Avui ens fonem! Gelat, ombra i ventall. La paella, millor demà.",
     "Quina calorada! Mode llangardaix activat: busca una ombra i no et moguis gaire."]; }
   else if(tmax>=30){ emoji='☀️'; msgs=[
-    "Quin sol! Avui toca gelat, ventall i, si pots, un bon capbussó. Visca l\'estiu!",
-    "Fa caloreta de la bona: barret, crema solar i molta aigua!",
-    "Dia de piscina o platja. Qui s\'hi apunta?"]; }
-  else if(tmax>=22){ emoji='😎'; msgs=[
-    "Dia de 10! Surt a fora i aprofita, que demà qui sap.",
+    "Quin sol! Avui toca gelat, ventall i, si pots, un bon capbussó. Visca l'estiu!",
+    "Fa molta calor: barret, crema solar i molta aigua!",
+    "Dia de piscina o platja. Qui s'hi apunta?"]; }
+  else if(tmax>=26){ emoji='😎'; msgs=[
+    "Fa caloreta! Roba lleugera, aigua a mà i a gaudir del bon temps.",
+    "Dia càlid de debò: samarreta de màniga curta i cap a fora.",
+    "Bona calor, perfecta per a terrassa, gelat o un capbussó."]; }
+  else if(tmax>=22){ emoji='🙂'; msgs=[
+    "Dia de 10! Temperatura perfecta, surt i aprofita.",
     "Temps immillorable per a una passejada o un vermut a la terrassa.",
-    "Ni fred ni calor: el dia perfecte per fer el que vulguis."]; }
-  else if(tmax>=16){ emoji='🙂'; msgs=[
+    "Ni massa fred ni massa calor: el dia ideal per fer el que vulguis."]; }
+  else if(tmax>=17){ emoji='🌤️'; msgs=[
     "Temps suau i agradable. Una rebequeta a la motxilla per si de cas i au!",
-    "Ni fred ni calor del tot. Dia tranquil, ideal per fer plans.",
+    "Dia tranquil, ni fred ni calor: ideal per fer plans.",
     "Mitja jaqueta i a gaudir del dia."]; }
-  else if(tmax>=10){ emoji='🧥'; msgs=[
-    "Fresqueta! Treu la jaqueta, que les mànigues curtes encara han d\'esperar.",
+  else if(tmax>=11){ emoji='🧥'; msgs=[
+    "Fresqueta! Treu la jaqueta, que les mànigues curtes encara han d'esperar.",
     "Comença a refrescar: una bona jaqueta i tot solucionat.",
     "Dia de jaqueta i passejada amb les galtes vermelles."]; }
   else if(tmax>=4){ emoji='🥶'; msgs=[
     "Quin fred! Bufanda, mitjons grossos i una xocolata desfeta ben calenta.",
-    "Fa fredet del bo: abriga\'t que avui mana l\'hivern.",
+    "Fa fredet del bo: abriga't que avui mana l'hivern.",
     "Dia de manteta, sopa calenta i peli al sofà."]; }
   else { emoji='❄️'; msgs=[
-    "Brrr, fa un fred que pela! Abriga\'t com una ceba i no treguis ni el nas.",
+    "Brrr, fa un fred que pela! Abriga't com una ceba i no treguis ni el nas.",
     "Fred polar! Gorro, guants i bufanda... i encara!",
-    "El millor pla d\'avui: manta, caldo i no sortir de casa."]; }
+    "El millor pla d'avui: manta, caldo i no sortir de casa."]; }
 
   let extra='';
   if([95,96,99].includes(code)) extra=funPick([
