@@ -105,6 +105,7 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 
 ## ✨ Funcions actuals
 
+- [x] **Mode família** 😜 (botó, actiu per defecte): missatge divertit a dalt de tot segons el temps (calor, fred, pluja, tempesta, vent…), amb frases que van rotant
 - [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
