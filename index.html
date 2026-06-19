@@ -80,6 +80,7 @@ h1 .plus { color: var(--accent); }
 .fun-speak-btn { background:none !important; border:none !important; padding:.3rem .4rem; font-size:1.3rem; cursor:pointer; flex-shrink:0; opacity:.6; transition:opacity .2s, transform .15s; line-height:1; margin-left:auto; align-self:flex-start; }
 .fun-speak-btn:hover { opacity:1; transform:scale(1.2); }
 .fun-birthday { display:block; background:rgba(251,191,36,.18); border:1.5px solid rgba(251,191,36,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--warn); }
+.fun-event { display:block; background:rgba(74,222,128,.15); border:1.5px solid rgba(74,222,128,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--good); }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
 .search-wrap { position: relative; }
@@ -340,7 +341,7 @@ const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.6';
+const APP_VERSION = '1.2.7';
 const BUILD_DATE  = '2026-06-19';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1356,6 +1357,14 @@ const BIRTHDAYS = [
 function todaysBirthdays(){
   const n=new Date(); return BIRTHDAYS.filter(b=>b.m===n.getMonth()+1&&b.d===n.getDate());
 }
+
+/* Esdeveniments especials (dia i mes, cada any) */
+const EVENTS = [
+  {m:7, d:4, msg:'🎉 Festa familiar a casa d\'en Ramón i la Sílvia! A gaudir a tope!!!'},
+];
+function todaysEvents(){
+  const n=new Date(); return EVENTS.filter(e=>e.m===n.getMonth()+1&&e.d===n.getDate());
+}
 /* Salutacions que van variant (totes valen per a una o més persones) */
 const FUN_GREETS = [
   n=>`👋 Ei, ${n}!`,
@@ -1443,16 +1452,19 @@ function renderFun(loc, fc){
   else if(tmax<4) wtype='cold';
 
   const bdays=todaysBirthdays();
-  if(bdays.length) wtype='birthday';
+  const evts=todaysEvents();
+  if(bdays.length||evts.length) wtype='birthday';
   const bdayHtml=bdays.length
     ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Molts anys! 🎉</span>`
     : '';
+  const evtHtml=evts.map(e=>`<span class="fun-event">${esc(e.msg)}</span>`).join('');
+  const specialEmoji=bdays.length?'🎂':evts.length?'🥳':emoji;
 
   const fam=familyFor(loc);
   const greet = fam ? `<span class="fun-greet">${funPick(FUN_GREETS)(esc(joinNames(fam.names)))}</span>` : '';
   return `<div class="fun-banner" id="funBanner" data-wtype="${wtype}">
-    <span class="fun-emoji">${bdays.length?'🎂':emoji}</span>
-    <div class="fun-text">${bdayHtml}${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
+    <span class="fun-emoji">${specialEmoji}</span>
+    <div class="fun-text">${evtHtml}${bdayHtml}${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
     <button class="fun-speak-btn" onclick="onFunSpeak()" title="Escolta el missatge">🔊</button>
   </div>`;
 }
