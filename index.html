@@ -518,6 +518,7 @@ function renderCityChips(){
 function goCity(i){ loadWeather(QUICK_CITIES[i]); }
 
 /* ── Geocodificació (cerca i suggeriments) ───────────────────────────────────── */
+const SUGGEST_ENABLED = false; // temporal: canviar a true per reactivar el desplegable
 let sugTimer=null, sugItems=[], sugActive=-1;
 async function fetchSuggest(name){
   const base = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&format=json`;
@@ -560,7 +561,7 @@ function closeSuggest(){ sugItems=[]; sugActive=-1; renderSuggest(); }
 $('q')?.addEventListener('input', e=>{
   const v=e.target.value.trim();
   clearTimeout(sugTimer);
-  if(v.length<2){ closeSuggest(); return; }
+  if(v.length<2 || !SUGGEST_ENABLED){ closeSuggest(); return; }
   sugTimer=setTimeout(async()=>{
     try{ sugItems=await fetchSuggest(v); sugActive=-1; renderSuggest(); }catch{ closeSuggest(); }
   },280);
