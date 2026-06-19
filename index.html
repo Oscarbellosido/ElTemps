@@ -337,7 +337,7 @@ const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 const BUILD_DATE  = '2026-06-17';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1329,8 +1329,19 @@ const FAMILY = [
   { town:'Sant Julià de Vilatorta', lat:41.9167, lon:2.3017, names:['Arnau','Mar'] },
   { town:'Barcelona',               lat:41.3888, lon:2.1590, names:['Jordi','Núria','Carles','Ricard','Olga'] },
   { town:'Taradell',                lat:41.8783, lon:2.2864, names:['Sílvia','Ramón'] },
+  { town:'Vilanova i la Geltrú',    lat:41.2241, lon:1.7252, names:['Benadet'] },
 ];
 function joinNames(a){ return a.length===1 ? a[0] : a.slice(0,-1).join(', ') + ' i ' + a[a.length-1]; }
+/* Salutacions que van variant (totes valen per a una o més persones) */
+const FUN_GREETS = [
+  n=>`👋 Ei, ${n}!`,
+  n=>`☀️ Bon dia, ${n}!`,
+  n=>`😄 Què tal, ${n}?`,
+  n=>`👋 Hola, ${n}!`,
+  n=>`😎 Ep, ${n}!`,
+  n=>`🌤️ Molt bon dia, ${n}!`,
+  n=>`🙌 Bones, ${n}!`,
+];
 function familyFor(loc){
   const n=normTxt(loc.name||'');
   for(const f of FAMILY){ if(n===normTxt(f.town)) return f; }              // per nom (cerca/recents)
@@ -1396,7 +1407,7 @@ function renderFun(loc, fc){
     "Boira pertot: molt de compte si condueixes!"]);
 
   const fam=familyFor(loc);
-  const greet = fam ? `<span class="fun-greet">👋 Ei, ${esc(joinNames(fam.names))}!</span>` : '';
+  const greet = fam ? `<span class="fun-greet">${funPick(FUN_GREETS)(esc(joinNames(fam.names)))}</span>` : '';
   return `<div class="fun-banner" id="funBanner">
     <span class="fun-emoji">${emoji}</span>
     <div class="fun-text">${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
