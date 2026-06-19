@@ -1,48 +1,70 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   El Temps — Service Worker (PWA instal·lable + funcionament offline)
+   El Temps — Service Worker (PWA instal·lable + offline robust)
    ════════════════════════════════════════════════════════════════════════════
-   Estratègia:
-   - HTML (navegació): network-first → sempre la versió més nova si hi ha
-     connexió; si no n'hi ha, es fa servir la versió en memòria cau.
-   - Estàtics propis (icones, manifest): cache-first.
-   - Peticions externes (Open-Meteo, Meteoalarm, Nominatim, Leaflet, tiles):
-     NO es toquen → sempre van a la xarxa (dades sempre fresques).
+   Objectiu: que MAI es vegi una pàgina en blanc.
+   - Navegació (HTML): network-first amb temps d'espera; si falla, s'usa la
+     còpia en memòria cau; si tampoc hi és, una pàgina mínima que recarrega.
+   - Estàtics propis: cache-first amb actualització.
+   - Peticions externes (APIs, tiles, Meteoalarm…): sempre a la xarxa.
    ════════════════════════════════════════════════════════════════════════════ */
-const CACHE = 'eltemps-v6';
+const CACHE = 'eltemps-v7';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    // add() individual amb catch: si un recurs falla, NO trenca tota la instal·lació
+    await Promise.all(SHELL.map(u => c.add(u).catch(() => {})));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
+
+// fetch amb temps d'espera (evita quedar penjat si la xarxa no respon)
+function fetchTimeout(req, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    fetch(req).then(r => { clearTimeout(t); resolve(r); }, err => { clearTimeout(t); reject(err); });
+  });
+}
 
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  const url = new URL(req.url);
+  let url;
+  try { url = new URL(req.url); } catch { return; }
   if (url.origin !== location.origin) return;            // externs → xarxa directa
 
-  // HTML / navegació: network-first
-  if (req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html')) {
-    e.respondWith(
-      fetch(req)
-        .then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r; })
-        .catch(() => caches.match(req).then(m => m || caches.match('./index.html')))
-    );
+  // Navegació: network-first (sempre versió nova si hi ha xarxa), amb xarxa de seguretat
+  if (req.mode === 'navigate') {
+    e.respondWith((async () => {
+      try {
+        const net = await fetchTimeout(req, 6000);
+        const c = await caches.open(CACHE); c.put('./index.html', net.clone()); c.put('./', net.clone());
+        return net;
+      } catch {
+        const cached = await caches.match('./index.html') || await caches.match('./') || await caches.match(req);
+        return cached || new Response(
+          '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="1">' +
+          '<body style="background:#0b1929;color:#8da9c0;font-family:sans-serif;text-align:center;padding-top:30vh">Carregant El Temps…</body>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+    })());
     return;
   }
 
-  // Estàtics propis: cache-first
+  // Estàtics propis: cache-first amb actualització en segon pla
   e.respondWith(
-    caches.match(req).then(m => m || fetch(req).then(r => {
+    caches.match(req).then(m => m || fetchTimeout(req, 8000).then(r => {
       const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r;
-    }))
+    }).catch(() => m))
   );
 });
