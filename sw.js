@@ -7,7 +7,7 @@
    - Estàtics propis: cache-first amb actualització.
    - Peticions externes (APIs, tiles, Meteoalarm…): sempre a la xarxa.
    ════════════════════════════════════════════════════════════════════════════ */
-const CACHE = 'eltemps-v8';
+const CACHE = 'eltemps-v9';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
