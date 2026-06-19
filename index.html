@@ -1414,45 +1414,95 @@ function familyFor(loc){
 function renderFun(loc, fc){
   if(!funOn() || !fc?.daily?.time) return '';
   const d=fc.daily;
+  // Dades diàries (per a extra, wtype i avís de pluja)
   const tmax=Math.round(d.temperature_2m_max[0]);
   const code=d.weather_code[0];
   const gust=Math.round(d.wind_gusts_10m_max?.[0]??0);
   const prob=d.precipitation_probability_max?.[0]??0;
   const mm=d.precipitation_sum?.[0]??0;
 
+  // Temperatura i hora actuals (no el màxim del dia)
+  const nowIso=fc.current?.time?.slice(0,13)??'';
+  const h=fc.hourly;
+  const hIdx=h?.time ? h.time.findIndex(t=>t.slice(0,13)===nowIso) : -1;
+  const tNow=Math.round(fc.current?.temperature_2m ?? (hIdx>=0&&h.temperature_2m ? h.temperature_2m[hIdx] : tmax));
+  const hour=new Date(fc.current?.time||Date.now()).getHours();
+  const isNit=hour>=22||hour<7; // 22h–7h
+
   let emoji, msgs;
-  if(tmax>=34){ emoji='🥵'; msgs=[
-    "Calor a tope! Posa't poca roba, beu aigua a galet i no facis el préssec al sol del migdia.",
-    "Avui ens fonem! Gelat, ombra i ventall. La paella, millor demà.",
-    "Quina calorada! Mode llangardaix activat: busca una ombra i no et moguis gaire."]; }
-  else if(tmax>=30){ emoji='☀️'; msgs=[
-    "Quin sol! Avui toca gelat, ventall i, si pots, un bon capbussó. Visca l'estiu!",
-    "Fa molta calor: barret, crema solar i molta aigua!",
-    "Dia de piscina o platja. Qui s'hi apunta?"]; }
-  else if(tmax>=26){ emoji='😎'; msgs=[
-    "Fa caloreta! Roba lleugera, aigua a mà i a gaudir del bon temps.",
-    "Dia càlid de debò: samarreta de màniga curta i cap a fora.",
-    "Bona calor, perfecta per a terrassa, gelat o un capbussó."]; }
-  else if(tmax>=22){ emoji='🙂'; msgs=[
-    "Dia de 10! Temperatura perfecta, surt i aprofita.",
-    "Temps immillorable per a una passejada o un vermut a la terrassa.",
-    "Ni massa fred ni massa calor: el dia ideal per fer el que vulguis."]; }
-  else if(tmax>=17){ emoji='🌤️'; msgs=[
-    "Temps suau i agradable. Una rebequeta a la motxilla per si de cas i au!",
-    "Dia tranquil, ni fred ni calor: ideal per fer plans.",
-    "Mitja jaqueta i a gaudir del dia."]; }
-  else if(tmax>=11){ emoji='🧥'; msgs=[
-    "Fresqueta! Treu la jaqueta, que les mànigues curtes encara han d'esperar.",
-    "Comença a refrescar: una bona jaqueta i tot solucionat.",
-    "Dia de jaqueta i passejada amb les galtes vermelles."]; }
-  else if(tmax>=4){ emoji='🥶'; msgs=[
-    "Quin fred! Bufanda, mitjons grossos i una xocolata desfeta ben calenta.",
-    "Fa fredet del bo: abriga't que avui mana l'hivern.",
-    "Dia de manteta, sopa calenta i peli al sofà."]; }
-  else { emoji='❄️'; msgs=[
-    "Brrr, fa un fred que pela! Abriga't com una ceba i no treguis ni el nas.",
-    "Fred polar! Gorro, guants i bufanda... i encara!",
-    "El millor pla d'avui: manta, caldo i no sortir de casa."]; }
+  if(tNow>=34){
+    emoji=isNit?'🌙':'🥵';
+    msgs=isNit
+      ?["Nit sufocant! Ventilador a tope, poca roba i finestra oberta.",
+        "Calor de nit insofrible: beu molt i intenta dormir fresquet.",
+        "Nit tòrrida. Un gelat de mitjanit no quedaria gens malament! 🍦"]
+      :["Calor a tope! Posa't poca roba, beu aigua a galet i no facis el préssec al sol del migdia.",
+        "Avui ens fonem! Gelat, ombra i ventall. La paella, millor demà.",
+        "Quina calorada! Mode llangardaix activat: busca una ombra i no et moguis gaire."];
+  } else if(tNow>=30){
+    emoji=isNit?'🌙':'☀️';
+    msgs=isNit
+      ?["Nit molt calorosa! Finestra oberta i ventilador: el kit de supervivència.",
+        "Calor forta de nit. Poc a poc refrescarà, aguanta! 😅",
+        "Vespre xafogós — balcó o terrassa per prendre l'aire fresc."]
+      :["Quin sol! Avui toca gelat, ventall i, si pots, un bon capbussó. Visca l'estiu!",
+        "Fa molta calor: barret, crema solar i molta aigua!",
+        "Dia de piscina o platja. Qui s'hi apunta?"];
+  } else if(tNow>=26){
+    emoji=isNit?'🌙':'😎';
+    msgs=isNit
+      ?["Nit càlida i agradable. Perfecte per una passejada nocturna o terrassa fins tard.",
+        "Vespre calorós: beguda fresca a fora i bona companyia. 🍹",
+        "Nit temperada ideal per seure a fora. Aprofita que fa bon temps!"]
+      :["Fa caloreta! Roba lleugera, aigua a mà i a gaudir del bon temps.",
+        "Dia càlid de debò: samarreta de màniga curta i cap a fora.",
+        "Bona calor, perfecta per a terrassa, gelat o un capbussó."];
+  } else if(tNow>=22){
+    emoji=isNit?'🌙':'🙂';
+    msgs=isNit
+      ?["Nit fresca i agradable: perfecta per dormir amb la finestra oberta.",
+        "Temperatura suau de nit. Manta lleugera i a descansar bé. 😴",
+        "Nit ideal per dormir com un soc. Bona nit!"]
+      :["Dia de 10! Temperatura perfecta, surt i aprofita.",
+        "Temps immillorable per a una passejada o un vermut a la terrassa.",
+        "Ni massa fred ni massa calor: el dia ideal per fer el que vulguis."];
+  } else if(tNow>=17){
+    emoji=isNit?'🌙':'🌤️';
+    msgs=isNit
+      ?["Nit fresca. Tanca la finestra i treu la manta del armari.",
+        "Refresca de nit: temperatura justa per dormir tapats i a gust.",
+        "Nit fresqueta, perfecta per descansar. Bona nit! 🛏️"]
+      :["Temps suau i agradable. Una rebequeta a la motxilla per si de cas i au!",
+        "Dia tranquil, ni fred ni calor: ideal per fer plans.",
+        "Mitja jaqueta i a gaudir del dia."];
+  } else if(tNow>=11){
+    emoji=isNit?'🌙':'🧥';
+    msgs=isNit
+      ?["Nit freda. Finestres tancades i manta gruixuda.",
+        "Fred de nit: pijama gruixut i una infusió calenta. 🍵",
+        "Nit freda — la manta és la teva millor amiga ara."]
+      :["Fresqueta! Treu la jaqueta, que les mànigues curtes encara han d'esperar.",
+        "Comença a refrescar: una bona jaqueta i tot solucionat.",
+        "Dia de jaqueta i passejada amb les galtes vermelles."];
+  } else if(tNow>=4){
+    emoji=isNit?'🌙':'🥶';
+    msgs=isNit
+      ?["Nit molt freda! Calefacció si cal i manta gruixuda.",
+        "Fred intens de nit. Tanca bé i dorm ben tapat. 🛏️",
+        "Nit gelada — escalfor del llit i de la manta. 🔥"]
+      :["Quin fred! Bufanda, mitjons grossos i una xocolata desfeta ben calenta.",
+        "Fa fredet del bo: abriga't que avui mana l'hivern.",
+        "Dia de manteta, sopa calenta i peli al sofà."];
+  } else {
+    emoji='❄️';
+    msgs=isNit
+      ?["Nit glacial! Sota zero. Calefacció al màxim i no obris ni la finestra. 🥶",
+        "Temperatura polar de nit. Compte amb el gel al carrer demà.",
+        "Nit sota zero: manta gruixuda i a arrupar-se ben bé!"]
+      :["Brrr, fa un fred que pela! Abriga't com una ceba i no treguis ni el nas.",
+        "Fred polar! Gorro, guants i bufanda... i encara!",
+        "El millor pla d'avui: manta, caldo i no sortir de casa."];
+  }
 
   let extra='';
   if([95,96,99].includes(code)) extra=funPick([
