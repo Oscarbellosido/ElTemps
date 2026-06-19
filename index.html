@@ -76,6 +76,7 @@ h1 .plus { color: var(--accent); }
 @keyframes funBob { 0%,100%{ transform:translateY(0) rotate(0); } 50%{ transform:translateY(-4px) rotate(-6deg); } }
 .fun-text { font-size:1.04rem; font-weight:700; line-height:1.45; color:var(--text-primary); }
 .fun-text .extra { display:block; font-weight:600; color:var(--warm); margin-top:.3rem; font-size:.95rem; }
+.fun-text .fun-greet { display:block; color:var(--accent); font-size:1.08rem; font-weight:800; margin-bottom:.25rem; }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
 .search-wrap { position: relative; }
@@ -336,7 +337,7 @@ const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 const BUILD_DATE  = '2026-06-17';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1322,6 +1323,21 @@ function applyFun(){
   }
 }
 function funPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* Família: segons el poble, saluda els qui hi viuen pel nom */
+const FAMILY = [
+  { town:'Sant Julià de Vilatorta', lat:41.9167, lon:2.3017, names:['Arnau','Mar'] },
+  { town:'Barcelona',               lat:41.3888, lon:2.1590, names:['Jordi','Núria','Carles','Ricard','Olga'] },
+  { town:'Taradell',                lat:41.8783, lon:2.2864, names:['Sílvia','Ramón'] },
+];
+function joinNames(a){ return a.length===1 ? a[0] : a.slice(0,-1).join(', ') + ' i ' + a[a.length-1]; }
+function familyFor(loc){
+  const n=normTxt(loc.name||'');
+  for(const f of FAMILY){ if(n===normTxt(f.town)) return f; }              // per nom (cerca/recents)
+  for(const f of FAMILY){ if(Math.hypot(f.lat-loc.lat,f.lon-loc.lon)<0.03) return f; }  // per coordenades (geo)
+  return null;
+}
+
 function renderFun(loc, fc){
   if(!funOn() || !fc?.daily?.time) return '';
   const d=fc.daily;
@@ -1379,9 +1395,11 @@ function renderFun(loc, fc){
     "I hi ha boira espessa! Avui anem a les palpentes, ull viu.",
     "Boira pertot: molt de compte si condueixes!"]);
 
+  const fam=familyFor(loc);
+  const greet = fam ? `<span class="fun-greet">👋 Ei, ${esc(joinNames(fam.names))}!</span>` : '';
   return `<div class="fun-banner" id="funBanner">
     <span class="fun-emoji">${emoji}</span>
-    <div class="fun-text">${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
+    <div class="fun-text">${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
   </div>`;
 }
 
