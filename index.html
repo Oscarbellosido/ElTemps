@@ -79,6 +79,7 @@ h1 .plus { color: var(--accent); }
 .fun-text .fun-greet { display:block; color:var(--accent); font-size:1.08rem; font-weight:800; margin-bottom:.25rem; }
 .fun-speak-btn { background:none !important; border:none !important; padding:.3rem .4rem; font-size:1.3rem; cursor:pointer; flex-shrink:0; opacity:.6; transition:opacity .2s, transform .15s; line-height:1; margin-left:auto; align-self:flex-start; }
 .fun-speak-btn:hover { opacity:1; transform:scale(1.2); }
+.fun-birthday { display:block; background:rgba(251,191,36,.18); border:1.5px solid rgba(251,191,36,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--warn); }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
 .search-wrap { position: relative; }
@@ -339,7 +340,7 @@ const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.5';
+const APP_VERSION = '1.2.6';
 const BUILD_DATE  = '2026-06-19';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1336,6 +1337,25 @@ const FAMILY = [
   { town:'Vilanova i la Geltrú',    lat:41.2241, lon:1.7252, names:['Benadet'] },
 ];
 function joinNames(a){ return a.length===1 ? a[0] : a.slice(0,-1).join(', ') + ' i ' + a[a.length-1]; }
+
+/* Aniversaris de la família (dia i mes, cada any) */
+const BIRTHDAYS = [
+  {m:1, d:14, name:'Ricard'}, {m:1, d:14, name:'Gerard'}, {m:1, d:29, name:'Olga'},
+  {m:2, d:8,  name:'Martí'},
+  {m:3, d:10, name:'Jordi'},  {m:3, d:26, name:'Laie'},
+  {m:4, d:10, name:'Ramon'},  {m:4, d:14, name:'Arlet'},
+  {m:5, d:8,  name:'Carles'}, {m:5, d:9,  name:'Fran'},
+  {m:6, d:9,  name:'Paula'},  {m:6, d:13, name:'Jofre'},  {m:6, d:14, name:'Lluís'},
+  {m:7, d:12, name:'Avi Miquel'}, {m:7, d:22, name:'Ona'}, {m:7, d:25, name:'Àvia Sílvia'},
+  {m:8, d:6,  name:'Queralt'}, {m:8, d:8,  name:'Mar'},   {m:8, d:24, name:'Anna'},
+  {m:9, d:11, name:'Bernadette'}, {m:9, d:24, name:'Miquel'}, {m:9, d:25, name:'Sílvia'}, {m:9, d:30, name:'Ray'},
+  {m:10, d:15, name:'Duna'},  {m:10, d:18, name:'Arnau Sañé'},
+  {m:11, d:14, name:'Arnau Soria'}, {m:11, d:30, name:'Núria'},
+  {m:12, d:16, name:'Jou'},   {m:12, d:19, name:'Ricard'}, {m:12, d:19, name:'Ari'}, {m:12, d:22, name:'Maria'},
+];
+function todaysBirthdays(){
+  const n=new Date(); return BIRTHDAYS.filter(b=>b.m===n.getMonth()+1&&b.d===n.getDate());
+}
 /* Salutacions que van variant (totes valen per a una o més persones) */
 const FUN_GREETS = [
   n=>`👋 Ei, ${n}!`,
@@ -1422,11 +1442,17 @@ function renderFun(loc, fc){
   else if(tmax>=30) wtype='hot';
   else if(tmax<4) wtype='cold';
 
+  const bdays=todaysBirthdays();
+  if(bdays.length) wtype='birthday';
+  const bdayHtml=bdays.length
+    ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Molts anys! 🎉</span>`
+    : '';
+
   const fam=familyFor(loc);
   const greet = fam ? `<span class="fun-greet">${funPick(FUN_GREETS)(esc(joinNames(fam.names)))}</span>` : '';
   return `<div class="fun-banner" id="funBanner" data-wtype="${wtype}">
-    <span class="fun-emoji">${emoji}</span>
-    <div class="fun-text">${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
+    <span class="fun-emoji">${bdays.length?'🎂':emoji}</span>
+    <div class="fun-text">${bdayHtml}${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
     <button class="fun-speak-btn" onclick="onFunSpeak()" title="Escolta el missatge">🔊</button>
   </div>`;
 }
@@ -1504,6 +1530,14 @@ function playFunTone(type){
     const f=ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=250; f.Q.value=.3;
     const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.4,t+.3); g.gain.linearRampToValueAtTime(.2,t+.6); g.gain.linearRampToValueAtTime(0,t+.9);
     s.connect(f); f.connect(g); g.connect(ctx.destination); s.start(t); s.stop(t+.9);
+  } else if(type==='birthday'){
+    // Escala festiva ascendent
+    [261.63,293.66,329.63,349.23,392,440,493.88,523.25].forEach((fr,i)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='triangle'; o.frequency.value=fr;
+      g.gain.setValueAtTime(0,t+i*.1); g.gain.linearRampToValueAtTime(.28,t+i*.1+.04); g.gain.exponentialRampToValueAtTime(.001,t+i*.1+.35);
+      o.connect(g); g.connect(ctx.destination); o.start(t+i*.1); o.stop(t+i*.1+.4);
+    });
   } else {
     [261.63,329.63,392].forEach((fr,i)=>{
       const o=ctx.createOscillator(),g=ctx.createGain();
