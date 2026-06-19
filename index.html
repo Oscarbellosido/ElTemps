@@ -339,7 +339,7 @@ const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
 const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.4';
+const APP_VERSION = '1.2.5';
 const BUILD_DATE  = '2026-06-19';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -792,6 +792,7 @@ function render(loc, fc, models, air, marine){
     renderRadar(),
   ].filter(Boolean).join('');
   $('result').innerHTML = html;
+  if(funOn()) autoPlayFun();
   if(models) wireConsensus(models);
   initRadar(loc);
 }
@@ -1322,6 +1323,7 @@ function applyFun(){
   const old=$('funBanner'); if(old) old.remove();
   if(funOn() && currentLoc && currentFc){
     $('result').insertAdjacentHTML('afterbegin', renderFun(currentLoc, currentFc));
+    autoPlayFun();
   }
 }
 function funPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
@@ -1430,8 +1432,38 @@ function renderFun(loc, fc){
 }
 
 /* ── Àudio mode família ───────────────────────────────────────────────────────── */
-let _ac=null;
+let _ac=null, _funMuted=false, _pendingAudio=null;
 function getAC(){ if(!_ac) try{ _ac=new(window.AudioContext||window.webkitAudioContext)(); }catch{} return _ac; }
+
+/* Primer gest de l'usuari: desbloqueja l'àudio pendent */
+function _resumePending(){
+  if(!_pendingAudio||_funMuted) return (_pendingAudio=null);
+  const ctx=getAC(); if(!ctx) return;
+  const wtype=_pendingAudio; _pendingAudio=null;
+  ctx.resume().then(()=>{ if(!_funMuted){ playFunTone(wtype); speakFun(); } });
+}
+document.addEventListener('click',    _resumePending, {once:true});
+document.addEventListener('touchstart',_resumePending, {once:true});
+
+/* Crida aquest mètode just després d'inserir el banner al DOM */
+function autoPlayFun(){
+  const btn=document.querySelector('.fun-speak-btn');
+  if(btn) btn.textContent=_funMuted?'🔇':'🔊';
+  if(_funMuted||!funOn()) return;
+  const wtype=document.getElementById('funBanner')?.dataset?.wtype||'nice';
+  const ctx=getAC(); if(!ctx) return;
+  if(ctx.state==='suspended'){ _pendingAudio=wtype; }
+  else { playFunTone(wtype); speakFun(); }
+}
+
+/* Botó 🔊/🔇: toggle mute */
+function onFunSpeak(){
+  _funMuted=!_funMuted;
+  const btn=document.querySelector('.fun-speak-btn');
+  if(btn) btn.textContent=_funMuted?'🔇':'🔊';
+  if(_funMuted){ if(window.speechSynthesis) speechSynthesis.cancel(); }
+  else { const wtype=document.getElementById('funBanner')?.dataset?.wtype||'nice'; playFunTone(wtype); speakFun(); }
+}
 
 function playFunTone(type){
   const ctx=getAC(); if(!ctx) return;
@@ -1491,11 +1523,6 @@ function speakFun(){
   speechSynthesis.speak(u);
 }
 
-function onFunSpeak(){
-  const wtype=document.getElementById('funBanner')?.dataset?.wtype||'nice';
-  playFunTone(wtype);
-  speakFun();
-}
 
 /* ── PWA: registre del service worker (instal·lable + offline) ───────────────── */
 if('serviceWorker' in navigator){
