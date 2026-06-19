@@ -57,12 +57,25 @@ body {
   transition: background-color .3s ease, color .3s ease;
 }
 .container { max-width: 920px; margin: 0 auto; position: relative; }
-h1 { color: var(--text-primary); font-size: 1.55rem; margin-bottom: .15rem; display:flex; align-items:center; gap:.5rem; padding-right: 2.6rem; }
+h1 { color: var(--text-primary); font-size: 1.55rem; margin-bottom: .15rem; display:flex; align-items:center; gap:.5rem; padding-right: 5.2rem; }
 h1 .logo { font-size: 1.6rem; }
 h1 .plus { color: var(--accent); }
-.subtitle { color: var(--text-secondary); font-size: .85rem; margin-bottom: 1.25rem; padding-right: 2.8rem; }
+.subtitle { color: var(--text-secondary); font-size: .85rem; margin-bottom: 1.25rem; padding-right: 5.4rem; }
 
 #theme-toggle { position:absolute; top:.2rem; right:0; background:none; border:none; padding:0; font-size:1.4rem; cursor:pointer; z-index:10; line-height:1; }
+#fun-toggle { position:absolute; top:.2rem; right:2.5rem; background:none; border:none; padding:0; font-size:1.4rem; cursor:pointer; z-index:10; line-height:1; transition:opacity .15s, transform .15s; }
+#fun-toggle:hover { transform:scale(1.15) rotate(-8deg); }
+
+/* ── Mode família (missatges divertits) ─────────────────────────────────────── */
+.fun-banner {
+  background: linear-gradient(135deg, rgba(253,230,138,.30), rgba(251,146,60,.18), rgba(56,189,248,.15)), var(--bg-secondary);
+  border:2px dashed rgba(251,146,60,.55); border-radius:18px; padding:1.15rem 1.35rem; margin-bottom:1.1rem;
+  display:flex; gap:.95rem; align-items:center;
+}
+.fun-emoji { font-size:2.9rem; line-height:1; flex-shrink:0; animation:funBob 2.2s ease-in-out infinite; }
+@keyframes funBob { 0%,100%{ transform:translateY(0) rotate(0); } 50%{ transform:translateY(-4px) rotate(-6deg); } }
+.fun-text { font-size:1.04rem; font-weight:700; line-height:1.45; color:var(--text-primary); }
+.fun-text .extra { display:block; font-weight:600; color:var(--warm); margin-top:.3rem; font-size:.95rem; }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
 .search-wrap { position: relative; }
@@ -284,6 +297,7 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 <body>
 <div class="container">
   <button id="theme-toggle" onclick="toggleTheme()" title="Canviar tema">🌙</button>
+  <button id="fun-toggle" onclick="toggleFun()" title="Mode família">😜</button>
   <h1><span class="logo">🌤️</span> El Temps</h1>
   <p class="subtitle">Predicció amb consens de múltiples models · Catalunya i tot el món</p>
 
@@ -320,8 +334,9 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 const RECENT_KEY = 'eltemps_recent';
 const FAV_KEY    = 'eltemps_fav';
 const THEME_KEY  = 'eltemps_theme';
+const FUN_KEY    = 'eltemps_fun';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.1.5';
+const APP_VERSION = '1.2.0';
 const BUILD_DATE  = '2026-06-17';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -733,7 +748,7 @@ function renderAlerts(list, checked){
       <div style="display:flex;align-items:center;gap:.5rem;color:var(--good);font-size:.85rem;font-weight:600">
         <span style="font-size:1.05rem">✅</span> Cap avís oficial actiu ara en aquesta zona.
       </div></div>`;
-    $('result').insertAdjacentHTML('afterbegin', html);
+    insertAlertHtml(html);
     return;
   }
   const order={Extreme:3, Severe:2, Moderate:1};
@@ -751,12 +766,19 @@ function renderAlerts(list, checked){
     <h2><span class="ic">⚠️</span> Avisos oficials <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· Meteoalarm / AEMET</span></h2>
     ${rows}
   </div>`;
-  $('result').insertAdjacentHTML('afterbegin', html);
+  insertAlertHtml(html);
+}
+/* Insereix l'avís després de la targeta del mode família (si hi és), o a dalt de tot */
+function insertAlertHtml(html){
+  const fb=$('funBanner');
+  if(fb) fb.insertAdjacentHTML('afterend', html);
+  else $('result').insertAdjacentHTML('afterbegin', html);
 }
 
 /* ── Render ──────────────────────────────────────────────────────────────────── */
 function render(loc, fc, models, air, marine){
   const html = [
+    renderFun(loc, fc),
     renderSummary(loc, fc, models, air),
     renderNow(loc, fc),
     renderHourly(fc),
@@ -1269,6 +1291,7 @@ function toggleRadarPlay(){
   renderCityChips();
   renderFav();
   renderRecent();
+  updateFunBtn();
   const v=$('ver'); if(v) v.textContent=`El Temps v${APP_VERSION} · ${BUILD_DATE}`;
   startTimers();
   // Enllaç compartit: ?lat=..&lon=..&name=..
@@ -1282,6 +1305,85 @@ function toggleRadarPlay(){
     else loadWeather(QUICK_CITIES[0]); // Barcelona per defecte
   }
 })();
+
+/* ── Mode família (missatges divertits) ──────────────────────────────────────── */
+function funOn(){ return localStorage.getItem(FUN_KEY)!=='0'; }   // actiu per defecte
+function toggleFun(){ localStorage.setItem(FUN_KEY, funOn()?'0':'1'); applyFun(); }
+function updateFunBtn(){
+  const b=$('fun-toggle'); if(!b) return;
+  b.style.opacity = funOn() ? '1' : '.4';
+  b.title = funOn() ? 'Mode família actiu — toca per apagar' : 'Mode família apagat — toca per encendre';
+}
+function applyFun(){
+  updateFunBtn();
+  const old=$('funBanner'); if(old) old.remove();
+  if(funOn() && currentLoc && currentFc){
+    $('result').insertAdjacentHTML('afterbegin', renderFun(currentLoc, currentFc));
+  }
+}
+function funPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function renderFun(loc, fc){
+  if(!funOn() || !fc?.daily?.time) return '';
+  const d=fc.daily;
+  const tmax=Math.round(d.temperature_2m_max[0]);
+  const code=d.weather_code[0];
+  const gust=Math.round(d.wind_gusts_10m_max?.[0]??0);
+  const prob=d.precipitation_probability_max?.[0]??0;
+  const mm=d.precipitation_sum?.[0]??0;
+
+  let emoji, msgs;
+  if(tmax>=34){ emoji='🥵'; msgs=[
+    "Calor a tope! Posa\'t poca roba, beu aigua a galet i no facis el préssec al sol del migdia.",
+    "Avui ens fonem! Gelat, ombra i ventall. La paella, millor demà.",
+    "Quina calorada! Mode llangardaix activat: busca una ombra i no et moguis gaire."]; }
+  else if(tmax>=30){ emoji='☀️'; msgs=[
+    "Quin sol! Avui toca gelat, ventall i, si pots, un bon capbussó. Visca l\'estiu!",
+    "Fa caloreta de la bona: barret, crema solar i molta aigua!",
+    "Dia de piscina o platja. Qui s\'hi apunta?"]; }
+  else if(tmax>=22){ emoji='😎'; msgs=[
+    "Dia de 10! Surt a fora i aprofita, que demà qui sap.",
+    "Temps immillorable per a una passejada o un vermut a la terrassa.",
+    "Ni fred ni calor: el dia perfecte per fer el que vulguis."]; }
+  else if(tmax>=16){ emoji='🙂'; msgs=[
+    "Temps suau i agradable. Una rebequeta a la motxilla per si de cas i au!",
+    "Ni fred ni calor del tot. Dia tranquil, ideal per fer plans.",
+    "Mitja jaqueta i a gaudir del dia."]; }
+  else if(tmax>=10){ emoji='🧥'; msgs=[
+    "Fresqueta! Treu la jaqueta, que les mànigues curtes encara han d\'esperar.",
+    "Comença a refrescar: una bona jaqueta i tot solucionat.",
+    "Dia de jaqueta i passejada amb les galtes vermelles."]; }
+  else if(tmax>=4){ emoji='🥶'; msgs=[
+    "Quin fred! Bufanda, mitjons grossos i una xocolata desfeta ben calenta.",
+    "Fa fredet del bo: abriga\'t que avui mana l\'hivern.",
+    "Dia de manteta, sopa calenta i peli al sofà."]; }
+  else { emoji='❄️'; msgs=[
+    "Brrr, fa un fred que pela! Abriga\'t com una ceba i no treguis ni el nas.",
+    "Fred polar! Gorro, guants i bufanda... i encara!",
+    "El millor pla d\'avui: manta, caldo i no sortir de casa."]; }
+
+  let extra='';
+  if([95,96,99].includes(code)) extra=funPick([
+    "I ull, que ve tempesta! Millor peli i manta a casa.",
+    "Tempesta a la vista: deixa estar el paraigua i queda\'t a recer!"]);
+  else if([71,73,75,77,85,86].includes(code)) extra=funPick([
+    "I pot nevar! A fer un ninot... o a mirar-la des del sofà ben tapat.",
+    "Neeeu! Treu el trineu (o la manta)."]);
+  else if(prob>=50 || mm>=1 || [51,53,55,61,63,65,66,67,80,81,82].includes(code)) extra=funPick([
+    "I a sobre plou! Agafa el paraigua o acabaràs com un ànec.",
+    "Plourà: paraigües a punt i compte amb els bassals!",
+    "Ve pluja; no t\'oblidis el paraigua... ni les botes d\'aigua!"]);
+  else if(gust>=50) extra=funPick([
+    "I fa un vent de por! Agafa\'t el barret i compte amb els para-sols voladors.",
+    "Vent fort: subjecta-ho tot, que avui vola fins el gos!"]);
+  else if([45,48].includes(code)) extra=funPick([
+    "I hi ha boira espessa! Avui anem a les palpentes, ull viu.",
+    "Boira pertot: molt de compte si condueixes!"]);
+
+  return `<div class="fun-banner" id="funBanner">
+    <span class="fun-emoji">${emoji}</span>
+    <div class="fun-text">${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}</div>
+  </div>`;
+}
 
 /* ── PWA: registre del service worker (instal·lable + offline) ───────────────── */
 if('serviceWorker' in navigator){
