@@ -1659,8 +1659,12 @@ function playFunTone(type){
 }
 
 function speakFun(){
-  const b=document.getElementById('funBanner'); if(!b) return;
-  const txt=b.querySelector('.fun-text')?.innerText||''; if(!txt||!window.speechSynthesis) return;
+  const b=document.getElementById('funBanner'); if(!b||!window.speechSynthesis) return;
+  const funTextEl=b.querySelector('.fun-text'); if(!funTextEl) return;
+  // Clona i elimina .fun-greet per no llegir noms en veu alta (independentment del CSS)
+  const clone=funTextEl.cloneNode(true);
+  clone.querySelectorAll('.fun-greet').forEach(el=>el.remove());
+  const txt=(clone.innerText||clone.textContent||'').trim(); if(!txt) return;
   speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(txt);
   u.lang='ca-ES'; u.rate=.92; u.pitch=1.08;
