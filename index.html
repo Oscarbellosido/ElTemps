@@ -1658,6 +1658,7 @@ function playFunTone(type){
   }
 }
 
+let _speakTimer=null;
 function speakFun(){
   const b=document.getElementById('funBanner'); if(!b||!window.speechSynthesis) return;
   const funTextEl=b.querySelector('.fun-text'); if(!funTextEl) return;
@@ -1666,11 +1667,30 @@ function speakFun(){
   clone.querySelectorAll('.fun-greet').forEach(el=>el.remove());
   const txt=(clone.innerText||clone.textContent||'').trim(); if(!txt) return;
   speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(txt);
-  u.lang='ca-ES'; u.rate=.92; u.pitch=1.08;
-  speechSynthesis.speak(u);
+  // Debounce: cancel·la el timeout anterior (clics ràpids) i en programa un de nou.
+  // Chrome bug: cancel()+speak() al mateix tick descarta silenciosament la utterance.
+  clearTimeout(_speakTimer);
+  _speakTimer=setTimeout(()=>{
+    _speakTimer=null;
+    if(_funMuted) return;
+    const u=new SpeechSynthesisUtterance(txt);
+    u.lang='ca-ES'; u.rate=.92; u.pitch=1.08;
+    u.onerror=()=>{ speechSynthesis.cancel(); };
+    speechSynthesis.speak(u);
+  }, 50);
 }
 
+
+/* ── Recuperació en tornar a la pestanya (visibilitychange + bfcache) ────────── */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden || !currentLoc) return;
+  // Si les dades tenen >5 min o no n'hi ha, recarrega (pot ser que el tab hagi estat congelat)
+  if(Date.now() - lastLoadTime > 5 * 60 * 1000) loadWeather(currentLoc);
+});
+// pageshow e.persisted=true → pàgina restaurada del bfcache (molt comú en mòbil)
+window.addEventListener('pageshow', e=>{
+  if(e.persisted && currentLoc) loadWeather(currentLoc);
+});
 
 /* ── PWA: registre del service worker (instal·lable + offline) ───────────────── */
 if('serviceWorker' in navigator){
