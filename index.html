@@ -343,7 +343,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.10';
+const APP_VERSION = '1.2.11';
 const BUILD_DATE  = '2026-06-22';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -647,7 +647,12 @@ async function loadWeather(loc, opts={}){
     currentFc = fc.value; lastLoadTime = Date.now(); offlineMode = false;
     saveOfflineCache(loc, fc.value);
     render(loc, fc.value, models.status==='fulfilled'?models.value:null, air.status==='fulfilled'?air.value:null, marine.status==='fulfilled'?marine.value:null);
-    if(!silent){ pushRecent(loc); $('result').classList.add('show'); window.scrollTo({ top:0, behavior:'smooth' }); }
+    if(!silent){ pushRecent(loc); window.scrollTo({ top:0, behavior:'smooth' }); }
+    // Recuperació: un refresc silenciós pot guanyar el gen a un load no-silenciós (p.ex. visibilitychange
+    // i l'auto-refresc disparant alhora en tornar de repós). El no-silenciós queda orfe amb el seu spinner
+    // penjat; com que aquest silenciós és el gen guanyador, ha de netejar l'estat i mostrar el resultat.
+    else hideStatus();
+    $('result').classList.add('show');
     updateFavBtn(); updateFreshness();
     loadAlerts(loc, gen);   // avisos oficials (asíncron, no bloqueja el temps)
   }catch(e){
