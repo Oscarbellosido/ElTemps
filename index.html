@@ -343,8 +343,8 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.7';
-const BUILD_DATE  = '2026-06-19';
+const APP_VERSION = '1.2.9';
+const BUILD_DATE  = '2026-06-21';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1322,22 +1322,29 @@ function toggleRadarPlay(){
 
 /* ── Init ────────────────────────────────────────────────────────────────────── */
 (function init(){
-  applyTheme(localStorage.getItem(THEME_KEY) || (window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark'));
-  renderCityChips();
-  renderFav();
-  renderRecent();
-  updateFunBtn();
-  const v=$('ver'); if(v) v.textContent=`El Temps v${APP_VERSION} · ${BUILD_DATE}`;
-  startTimers();
-  // Enllaç compartit: ?lat=..&lon=..&name=..
-  const p=new URLSearchParams(location.search);
-  const plat=parseFloat(p.get('lat')), plon=parseFloat(p.get('lon'));
-  if(!isNaN(plat) && !isNaN(plon)){
-    loadWeather({ name:p.get('name')||'Ubicació compartida', lat:plat, lon:plon });
-  } else {
-    const recent=loadRecent();
-    if(recent.length) loadWeather(recent[0]);
-    else loadWeather(QUICK_CITIES[0]); // Barcelona per defecte
+  try {
+    applyTheme(localStorage.getItem(THEME_KEY) || (window.matchMedia?.('(prefers-color-scheme: light)').matches?'light':'dark'));
+    renderCityChips();
+    renderFav();
+    renderRecent();
+    updateFunBtn();
+    const v=$('ver'); if(v) v.textContent=`El Temps v${APP_VERSION} · ${BUILD_DATE}`;
+    startTimers();
+    // Enllaç compartit: ?lat=..&lon=..&name=..
+    const p=new URLSearchParams(location.search);
+    const plat=parseFloat(p.get('lat')), plon=parseFloat(p.get('lon'));
+    if(!isNaN(plat) && !isNaN(plon)){
+      loadWeather({ name:p.get('name')||'Ubicació compartida', lat:plat, lon:plon });
+    } else {
+      const recent=loadRecent();
+      if(recent.length) loadWeather(recent[0]);
+      else loadWeather(QUICK_CITIES[0]);
+    }
+  } catch(err) {
+    // Fallback: mostra l'error i carrega Barcelona per evitar pantalla en blanc
+    console.error('init error:', err);
+    try { showStatus('Error en iniciar l\'app. Carregant dades per defecte…', 'error'); } catch{}
+    try { loadWeather(QUICK_CITIES[0]); } catch{}
   }
 })();
 
@@ -1684,12 +1691,14 @@ function speakFun(){
 /* ── Recuperació en tornar a la pestanya (visibilitychange + bfcache) ────────── */
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden || !currentLoc) return;
-  // Si les dades tenen >5 min o no n'hi ha, recarrega (pot ser que el tab hagi estat congelat)
-  if(Date.now() - lastLoadTime > 5 * 60 * 1000) loadWeather(currentLoc);
+  // lastLoadTime>0 evita race condition en arrencada freda (visibilitychange pot disparar
+  // mentre el primer fetch encara no ha acabat i lastLoadTime=0, provocant un segon fetch
+  // que mata el primer via gen mismatch i deixa #result ocult si el segon falla)
+  if(lastLoadTime > 0 && Date.now() - lastLoadTime > 5 * 60 * 1000) loadWeather(currentLoc);
 });
 // pageshow e.persisted=true → pàgina restaurada del bfcache (molt comú en mòbil)
 window.addEventListener('pageshow', e=>{
-  if(e.persisted && currentLoc) loadWeather(currentLoc);
+  if(e.persisted && currentLoc && lastLoadTime > 0) loadWeather(currentLoc);
 });
 
 /* ── PWA: registre del service worker (instal·lable + offline) ───────────────── */
