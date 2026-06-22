@@ -343,8 +343,8 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.9';
-const BUILD_DATE  = '2026-06-21';
+const APP_VERSION = '1.2.10';
+const BUILD_DATE  = '2026-06-22';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -764,10 +764,14 @@ async function loadAlerts(loc, gen){
         if(!matched.length) continue;
         const onset=new Date(info.onset||info.effective||w.alert.sent).getTime();
         const exp=new Date(info.expires||0).getTime();
-        if(!(onset<=now && now<=exp)) continue;             // només vigents ara
+        // Mostra avisos actius ARA o que comencen en les pròximes 6h (alertes de calor
+        // s'emeten el matí per a la tarda; sense lookahead s'ocultarien fins al migdia)
+        const LOOKAHEAD = 6 * 3600 * 1000;
+        if(!(onset <= now + LOOKAHEAD && now <= exp)) continue;
         const key=info.severity+'|'+(info.event||'')+'|'+matched.join(',');
         if(seen.has(key)) continue; seen.add(key);
-        found.push({ event:info.event||'Avís meteorològic', sev:info.severity, areas:[...new Set(matched)], onset, exp });
+        const upcoming = onset > now;
+        found.push({ event:info.event||'Avís meteorològic', sev:info.severity, areas:[...new Set(matched)], onset, exp, upcoming });
       }
     }
     if(gen!==loadGen) return;
@@ -790,10 +794,13 @@ function renderAlerts(list, checked){
   const fmt=t=>{ const d=new Date(t); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; };
   const rows=list.map(a=>{
     const s=SEV[a.sev]||SEV.Moderate;
-    return `<div class="alert-item" style="border-left-color:${s.col}">
-      <div class="alert-sev" style="color:${s.col}">${s.ic} ${esc(a.event)}</div>
+    const timing = a.upcoming
+      ? `<div class="alert-meta">🕐 Previst a partir de les ${fmt(a.onset)} · fins ${fmt(a.exp)}</div>`
+      : `<div class="alert-meta">⏱ Vigent fins ${fmt(a.exp)}</div>`;
+    return `<div class="alert-item" style="border-left-color:${s.col}${a.upcoming?';opacity:.85':''}">
+      <div class="alert-sev" style="color:${s.col}">${s.ic} ${esc(a.event)}${a.upcoming?' <span style="font-size:.75rem;opacity:.7">(avís d\'avui)</span>':''}</div>
       <div class="alert-meta">📍 ${esc(a.areas.join(' · '))}</div>
-      <div class="alert-meta">⏱ Vigent fins ${fmt(a.exp)}</div>
+      ${timing}
     </div>`;
   }).join('');
   const html=`<div class="card alert-banner" id="alertBanner">
@@ -1465,14 +1472,20 @@ function renderFun(loc, fc){
         "Dia càlid de debò: samarreta de màniga curta i cap a fora.",
         "Bona calor, perfecta per a terrassa, gelat o un capbussó."];
   } else if(tNow>=22){
-    emoji=isNit?'🌙':'🙂';
+    // Nit: 22-25° és nit càlida/tropical (≥20° = nit tropical), NO "fresca"
+    // Dia: si tmax≥30 avisa de la calor que ve, tot i que ara fa 22-25°
+    emoji=isNit?'🌙':(tmax>=30?'🌡️':'🙂');
     msgs=isNit
-      ?["Nit fresca i agradable: perfecta per dormir amb la finestra oberta.",
-        "Temperatura suau de nit. Manta lleugera i a descansar bé. 😴",
-        "Nit ideal per dormir com un soc. Bona nit!"]
-      :["Dia de 10! Temperatura perfecta, surt i aprofita.",
-        "Temps immillorable per a una passejada o un vermut a la terrassa.",
-        "Ni massa fred ni massa calor: el dia ideal per fer el que vulguis."];
+      ?[`Nit càlida! ${tNow}° de mínima — llencol fi i finestra oberta si pots.`,
+        `Nit tropical: la temperatura no baixa de ${tNow}°. Ventilador si cal, bona nit!`,
+        `Calor de nit: ${tNow}°. Ventila bé l'habitació abans de dormir. 🌙`]
+      : tmax>=30
+        ?[`Ara ${tNow}° però avui pujarà fins a ${tmax}°. Hidratació i protecció solar!`,
+          `Bon matí amb ${tNow}°, però la màxima serà de ${tmax}°. Evita el sol del migdia.`,
+          `Temperatura agradable de moment — atenció: màxima de ${tmax}° prevista avui!`]
+        :["Dia de 10! Temperatura perfecta, surt i aprofita.",
+          "Temps immillorable per a una passejada o un vermut a la terrassa.",
+          "Ni massa fred ni massa calor: el dia ideal per fer el que vulguis."];
   } else if(tNow>=17){
     emoji=isNit?'🌙':'🌤️';
     msgs=isNit
