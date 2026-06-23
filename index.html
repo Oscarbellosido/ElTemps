@@ -238,9 +238,10 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   border:1px solid var(--border); border-radius:18px; padding:1.3rem 1.5rem; margin-bottom:1.1rem;
   transition:background-color .3s ease;
 }
-.sum-head { display:flex; align-items:center; gap:.85rem; margin-bottom:.75rem; flex-wrap:wrap; }
-.sum-icon { font-size:2.7rem; line-height:1; }
-.sum-title { font-size:1.05rem; font-weight:700; }
+.sum-head { display:flex; align-items:center; gap:.5rem .85rem; margin-bottom:.75rem; flex-wrap:wrap; }
+.sum-icon { font-size:2.7rem; line-height:1; flex-shrink:0; }
+.sum-head-info { flex:1; min-width:min(100%, 9rem); }
+.sum-title { font-size:1.05rem; font-weight:700; overflow-wrap:break-word; word-break:break-word; }
 .sum-sub { color:var(--text-secondary); font-size:.78rem; }
 .sum-text { font-size:.92rem; line-height:1.75; color:var(--text-primary); }
 .sum-text strong { color:var(--accent); font-weight:700; }
@@ -356,7 +357,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.16';
+const APP_VERSION = '1.2.17';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1135,7 +1136,7 @@ function renderSummary(loc, fc, models, air){
   return `<div class="summary-card">
     <div class="sum-head">
       <span class="sum-icon">${icon}</span>
-      <div style="flex:1;min-width:0"><div class="sum-title">Resum d'avui a ${esc(loc.name)}</div><div class="sum-sub">${sub}</div></div>
+      <div class="sum-head-info"><div class="sum-title">Resum d'avui a ${esc(loc.name)}</div><div class="sum-sub">${sub}</div></div>
       <div class="now-actions">
         <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
         <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
