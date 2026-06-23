@@ -356,7 +356,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.15';
+const APP_VERSION = '1.2.16';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1808,6 +1808,13 @@ function renderFun(loc, fc){
 let _ac=null, _funMuted=false, _pendingAudio=null;
 function getAC(){ if(!_ac) try{ _ac=new(window.AudioContext||window.webkitAudioContext)(); }catch{} return _ac; }
 
+/* Precarrega les veus de speechSynthesis (Android: getVoices() retorna [] fins a voiceschanged) */
+let _voices=[];
+if(window.speechSynthesis){
+  _voices=speechSynthesis.getVoices();
+  if(!_voices.length) speechSynthesis.addEventListener('voiceschanged',()=>{ _voices=speechSynthesis.getVoices(); },{once:true});
+}
+
 /* Primer gest de l'usuari: desbloqueja l'àudio pendent */
 function _resumePending(){
   if(!_pendingAudio||_funMuted) return (_pendingAudio=null);
@@ -1829,13 +1836,25 @@ function autoPlayFun(){
   else { playFunTone(wtype); speakFun(); }
 }
 
-/* Botó 🔊/🔇: toggle mute */
+/* Botó 🔊/🔇: si parla → para; si no parla → reprodueix.
+   Abans era un toggle mute: el PRIMER clic mutava (no sonava) i el segon
+   reproduïa. A Android, l'autoplay queda pendent (AudioContext suspès), de
+   manera que el primer clic sempre era un "primer clic sense so" → bug. */
 function onFunSpeak(){
-  _funMuted=!_funMuted;
   const btn=document.querySelector('.fun-speak-btn');
-  if(btn) btn.textContent=_funMuted?'🔇':'🔊';
-  if(_funMuted){ if(window.speechSynthesis) speechSynthesis.cancel(); }
-  else { const wtype=document.getElementById('funBanner')?.dataset?.wtype||'nice'; playFunTone(wtype); speakFun(); }
+  if(window.speechSynthesis&&(speechSynthesis.speaking||speechSynthesis.pending)){
+    // Ja parlant → para
+    speechSynthesis.cancel(); _funMuted=true;
+    if(btn) btn.textContent='🔇'; return;
+  }
+  // No parlant → reprodueix (desbloqueja AudioContext si cal)
+  _funMuted=false; _pendingAudio=null; // evita doble play si _resumePending també dispara
+  if(btn) btn.textContent='🔊';
+  const wtype=document.getElementById('funBanner')?.dataset?.wtype||'nice';
+  const ctx=getAC();
+  if(ctx&&ctx.state==='suspended'){
+    ctx.resume().then(()=>{ playFunTone(wtype); speakFun(); });
+  } else { playFunTone(wtype); speakFun(); }
 }
 
 function playFunTone(type){
