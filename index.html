@@ -347,8 +347,8 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.12';
-const BUILD_DATE  = '2026-06-22';
+const APP_VERSION = '1.2.13';
+const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -979,8 +979,11 @@ function renderAlerts(list, checked){
   </div>`;
   insertAlertHtml(html);
 }
-/* Insereix l'avís després de la targeta del mode família (si hi és), o a dalt de tot */
+/* Insereix l'avís just abans de "Pròximes 24 hores"; si no hi és (sense dades horàries),
+   cau a després del mode família o a dalt de tot */
 function insertAlertHtml(html){
+  const hourly=$('hourlyCard');
+  if(hourly){ hourly.insertAdjacentHTML('beforebegin', html); return; }
   const fb=$('funBanner');
   if(fb) fb.insertAdjacentHTML('afterend', html);
   else $('result').insertAdjacentHTML('afterbegin', html);
@@ -1197,7 +1200,7 @@ function renderHourly(fc){
       <div class="p">${prob>0?'💧'+prob+'%':''}</div>
     </div>`;
   }
-  return `<div class="card"><h2><span class="ic">🕐</span> Pròximes 24 hores</h2>
+  return `<div class="card" id="hourlyCard"><h2><span class="ic">🕐</span> Pròximes 24 hores</h2>
     ${renderHourlyChart(h, idx)}
     <div class="hourly-scroll">${cells}</div></div>`;
 }
