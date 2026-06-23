@@ -150,7 +150,7 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 }
 /* Capa d'efectes meteorològics (sol, pluja, neu, boira, tempesta…) */
 .wx-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
-.now-hero > .now-loc, .now-hero > .now-time, .now-hero > .now-main, .now-hero > .now-stats { position:relative; z-index:1; }
+.now-hero > .now-loc, .now-hero > .now-time, .now-hero > .now-main, .now-hero > .now-stats, .now-hero > .nowcast { position:relative; z-index:1; }
 @media (prefers-reduced-motion: reduce){ .wx-canvas { display:none; } }
 .now-loc { display:flex; align-items:baseline; gap:.55rem; flex-wrap:wrap; margin-bottom:.15rem; }
 .now-loc .city { font-size:1.25rem; font-weight:700; }
@@ -165,6 +165,15 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .now-feels { color:var(--text-secondary); font-size:.82rem; }
 .now-rain-badge { display:inline-flex; align-items:center; gap:.35rem; margin-top:.55rem; background:rgba(56,189,248,.12); border:1px solid var(--border); color:var(--accent); padding:.3rem .7rem; border-radius:20px; font-size:.8rem; font-weight:600; }
 
+.nowcast { display:flex; align-items:center; gap:.6rem; margin-top:1rem; padding:.6rem .85rem; border-radius:14px; border:1px solid var(--border); background:var(--bg-card); }
+.nowcast .nc-ic { font-size:1.5rem; line-height:1; }
+.nowcast .nc-txt { display:flex; flex-direction:column; gap:.1rem; }
+.nowcast .nc-title { font-size:.92rem; font-weight:700; }
+.nowcast .nc-sub { font-size:.78rem; color:var(--text-secondary); }
+.nowcast--rain, .nowcast--wet { border-color:rgba(56,189,248,.4); background:rgba(56,189,248,.1); }
+.nowcast--rain .nc-title, .nowcast--wet .nc-title { color:var(--accent); }
+.nowcast--dry { border-color:rgba(74,222,128,.32); background:rgba(74,222,128,.08); }
+.nowcast--dry .nc-title { color:var(--good); }
 .now-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.55rem; margin-top:1.25rem; }
 .stat { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:.7rem .85rem; transition:background-color .3s ease; }
 .stat .lbl { color:var(--text-secondary); font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.3rem; display:flex; align-items:center; gap:.3rem; }
@@ -347,7 +356,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.14';
+const APP_VERSION = '1.2.15';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -840,6 +849,7 @@ async function fetchForecast(loc){
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}`
     + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,`
     + `cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m`
+    + `&minutely_15=precipitation`
     + `&hourly=temperature_2m,precipitation_probability,weather_code,is_day,freezing_level_height,snow_depth`
     + `&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_sum,`
     + `precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,`
@@ -1136,6 +1146,37 @@ function renderSummary(loc, fc, models, air){
   </div>`;
 }
 
+/* Nowcasting de pluja: analitza la precipitació cada 15 min de les pròximes ~2 h
+   i diu quan comença / quan para de ploure. Dades minutely_15 d'Open-Meteo (mm/15 min). */
+function renderNowcast(fc){
+  const m=fc.minutely_15;
+  if(!m?.time || !m?.precipitation || !fc.current?.time) return '';
+  const nowMs=new Date(fc.current.time).getTime();
+  let start=m.time.findIndex(t=>new Date(t).getTime()>nowMs);
+  if(start<0) return '';                 // no hi ha intervals futurs
+  if(start>0) start--;                   // inclou l'interval que conté "ara"
+  const HORIZON=8;                       // 8 × 15 min = 2 h
+  const end=Math.min(start+HORIZON+1, m.time.length);
+  const slice=[]; for(let i=start;i<end;i++) slice.push({ t:new Date(m.time[i]).getTime(), p:m.precipitation[i]??0 });
+  if(slice.length<2) return '';
+  const WET=0.1;                         // mm en 15 min per considerar que plou
+  const fmt=ms=>{ const d=new Date(ms); return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; };
+  const minsTo=ms=>Math.max(0, Math.round((ms-nowMs)/60000));
+  const box=(cls,ic,title,sub)=>`<div class="nowcast nowcast--${cls}"><span class="nc-ic">${ic}</span><span class="nc-txt"><span class="nc-title">${title}</span><span class="nc-sub">${sub}</span></span></div>`;
+
+  if(slice[0].p>=WET){                    // ara plou → quan para?
+    const dry=slice.findIndex(s=>s.p<WET);
+    if(dry<0) return box('rain','🌧️','Pluja continuada','Continua plovent les pròximes 2 h.');
+    const w=slice[dry].t, mn=minsTo(w);
+    return box('rain','🌦️','Para de ploure', mn>0?`Cap a les ${fmt(w)} · en ~${mn} min.`:`Està parant ara mateix.`);
+  } else {                                // ara no plou → quan comença?
+    const wet=slice.findIndex((s,i)=>i>0 && s.p>=WET);
+    if(wet<0) return box('dry','🌤️','Sense pluja a la vista','No es preveu pluja les pròximes 2 h.');
+    const w=slice[wet].t, mn=minsTo(w);
+    return box('wet','🌧️','Comença a ploure',`Cap a les ${fmt(w)} · en ~${mn} min.`);
+  }
+}
+
 function renderNow(loc, fc){
   const c=fc.current, u=fc.current_units;
   const [ , desc] = wmo(c.weather_code);
@@ -1177,6 +1218,7 @@ function renderNow(loc, fc){
         ${rainBadge}
       </div>
     </div>
+    ${renderNowcast(fc)}
     <div class="now-stats">${stats}</div>
   </div>`;
 }
