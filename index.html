@@ -357,7 +357,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.18';
+const APP_VERSION = '1.2.19';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1192,7 +1192,21 @@ function renderNow(loc, fc){
   const icon = wmoIcon(c.weather_code, c.is_day===1);
   const t = Math.round(c.temperature_2m);
   const feels = Math.round(c.apparent_temperature);
-  const rainProb = fc.daily?.precipitation_probability_max?.[0];
+  // Probabilitat de pluja: màxim de les hores RESTANTS d'avui (no el màxim diari
+  // d'Open-Meteo, que inclou hores ja passades i pot ser 0% quan les properes no ho són)
+  let rainProb = null;
+  { const hh=fc.hourly;
+    if(hh?.time && hh?.precipitation_probability){
+      const nowIso=c.time.slice(0,13), todayDate=c.time.slice(0,10);
+      let hs=hh.time.findIndex(t=>t.slice(0,13)===nowIso); if(hs<0) hs=0;
+      let mx=0;
+      for(let i=hs;i<hh.time.length;i++){
+        if(hh.time[i].slice(0,10)!==todayDate) break;
+        mx=Math.max(mx, hh.precipitation_probability[i]??0);
+      }
+      rainProb=mx;
+    } else { rainProb=fc.daily?.precipitation_probability_max?.[0]??null; }
+  }
   const tz = fc.timezone_abbreviation || '';
   const now = new Date(c.time);
   const timeStr = `${DAYS[now.getDay()]}, ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
@@ -1200,8 +1214,9 @@ function renderNow(loc, fc){
   const sunset  = fc.daily?.sunset?.[0]?.slice(11,16);
   const region = loc.region || (loc.country||'');
 
+  const rainMm = r1(fc.daily?.precipitation_sum?.[0]??0);
   const rainBadge = (rainProb!=null)
-    ? `<div class="now-rain-badge">💧 ${rainProb}% prob. de pluja avui · ${r1(fc.daily.precipitation_sum[0])} mm</div>` : '';
+    ? `<div class="now-rain-badge">💧 ${rainProb}% prob. de pluja avui${(rainProb>0 && parseFloat(rainMm)>0)?` · ${rainMm} mm`:''}</div>` : '';
 
   const stats = [
     ['💨 Vent', `${Math.round(c.wind_speed_10m)} <small>${u.wind_speed_10m}</small> ${compass(c.wind_direction_10m)}`],
