@@ -357,7 +357,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.20';
+const APP_VERSION = '1.2.21';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1098,6 +1098,12 @@ function renderSummary(loc, fc, models, air){
   // Sensació tèrmica actual tenint en compte la humitat de l'ambient
   const tNow=Math.round(c.temperature_2m), feelsNow=Math.round(c.apparent_temperature), hum=c.relative_humidity_2m;
   txt += ` Ara fa <strong>${tNow}°</strong> amb un <strong>${hum}%</strong> d'humitat; la sensació és de <strong>${feelsNow}°</strong>.`;
+  // Nota contextual quan les condicions actuals difereixen del resum del dia
+  // (daily.weather_code = pitjor moment del dia; current pot ser diferent)
+  { const cur=c.weather_code, day=d.weather_code[0];
+    if(cur<=1 && day>=2) txt += ` <strong>Ara el cel s'ha aclarit.</strong>`;
+    else if(cur>=3 && day<=1) txt += ` Ara: <strong>${wmo(cur)[1].toLowerCase()}</strong>.`;
+  }
 
   // Pluja: quan plourà la resta del dia (hores amb prob ≥ 40%)
   const nowIso = c.time.slice(0,13);
