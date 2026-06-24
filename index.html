@@ -357,7 +357,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.17';
+const APP_VERSION = '1.2.18';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -518,11 +518,19 @@ function wxFrame(now){
 }
 
 function drawSun(ctx,now,light){
-  const {w,h}=wxFx, cx=w*0.86, cy=h*0.24, R=Math.min(w,h)*0.10+8, t=now/1000;
+  const {w,h}=wxFx;
+  // En pantalles estretes (<420px) el sol puja a l'angle sup-dret i reduïm el glow
+  // per evitar que el resplendor tapi el text de descripció (que a mòbil queda baix)
+  const narrow = w < 420;
+  const cx = w * (narrow ? 0.93 : 0.86);
+  const cy = narrow ? h * 0.12 : h * 0.24;
+  const R  = (Math.min(w,h)*0.10+8) * (narrow ? 0.65 : 1);
+  const gf = narrow ? 2.0 : 3.4;
+  const t=now/1000;
   const col=light?'255,178,40':'255,205,80';
-  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,R*3.4);
+  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,R*gf);
   g.addColorStop(0,`rgba(${col},${light?0.32:0.30})`); g.addColorStop(1,`rgba(${col},0)`);
-  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,R*3.4,0,7); ctx.fill();
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,R*gf,0,7); ctx.fill();
   const pulse=1+0.12*Math.sin(t*1.6);
   ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*0.18);
   ctx.strokeStyle=`rgba(${col},${light?0.5:0.42})`; ctx.lineWidth=2; ctx.lineCap='round';
