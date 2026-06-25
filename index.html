@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#38bdf8">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<!-- Leaflet (radar): allotjat al repo i carregat de manera tardana (vegeu loadLeaflet) -->
 <style>
 /* ── Variables ──────────────────────────────────────────────────────────────── */
 :root {
@@ -346,7 +346,6 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   </p>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
    El Temps — predicció multi-model amb Open-Meteo
@@ -357,8 +356,8 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.22';
-const BUILD_DATE  = '2026-06-23';
+const APP_VERSION = '1.2.23';
+const BUILD_DATE  = '2026-06-25';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1024,7 +1023,7 @@ function render(loc, fc, models, air, marine){
   $('result').innerHTML = html;
   if(funOn()) autoPlayFun();
   if(models) wireConsensus(models);
-  initRadar(loc);
+  scheduleRadar(loc);
   try{ setWeatherFx(fc.current.weather_code, fc.current.is_day===1); }catch{}
 }
 
@@ -1528,7 +1527,41 @@ function renderAir(air){
 }
 
 /* ── Radar de pluja (RainViewer + Leaflet) ──────────────────────────────────── */
-let radarMap=null, radarLayers=[], radarFrames=[], radarIdx=0, radarTimer=null;
+let radarMap=null, radarLayers=[], radarFrames=[], radarIdx=0, radarTimer=null, radarObserver=null;
+
+// Leaflet allotjat al repo i carregat NOMÉS quan cal (estalvia ~160 KB a la càrrega
+// inicial; el radar queda avall i no sempre es mira). Es precacheja al service worker.
+let leafletPromise=null;
+function loadLeaflet(){
+  if(typeof L!=='undefined') return Promise.resolve();
+  if(leafletPromise) return leafletPromise;
+  leafletPromise=new Promise((resolve,reject)=>{
+    const css=document.createElement('link');
+    css.rel='stylesheet'; css.href='vendor/leaflet.css';
+    document.head.appendChild(css);
+    const s=document.createElement('script');
+    s.src='vendor/leaflet.js'; s.async=true;
+    s.onload=()=>resolve();
+    s.onerror=()=>{ leafletPromise=null; reject(new Error('leaflet')); };
+    document.head.appendChild(s);
+  });
+  return leafletPromise;
+}
+
+// Càrrega tardana: només inicia el radar (i baixa Leaflet) quan la targeta entra
+// en pantalla. Es reinicia a cada render perquè #result es repinta sencer.
+function scheduleRadar(loc){
+  if(radarObserver){ radarObserver.disconnect(); radarObserver=null; }
+  const el=$('radar-map'); if(!el) return;
+  if(!('IntersectionObserver' in window)){ initRadar(loc); return; }
+  radarObserver=new IntersectionObserver((entries,obs)=>{
+    if(entries.some(e=>e.isIntersecting)){
+      obs.disconnect(); radarObserver=null;
+      initRadar(loc);
+    }
+  },{ rootMargin:'250px' });
+  radarObserver.observe(el);
+}
 
 function renderRadar(){
   return `<div class="card">
@@ -1544,6 +1577,8 @@ function renderRadar(){
 }
 
 async function initRadar(loc){
+  try{ await loadLeaflet(); }
+  catch{ const el=$('radar-map'); if(el) el.innerHTML='<p style="padding:1rem;color:var(--text-secondary);font-size:.85rem">No s\'ha pogut carregar el mapa del radar.</p>'; return; }
   if(typeof L==='undefined') return;
   if(radarTimer){ clearInterval(radarTimer); radarTimer=null; }
   if(radarMap){ radarMap.remove(); radarMap=null; }
