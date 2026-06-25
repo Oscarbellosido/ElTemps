@@ -357,7 +357,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.21';
+const APP_VERSION = '1.2.22';
 const BUILD_DATE  = '2026-06-23';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1080,10 +1080,33 @@ function groupRanges(indices){
   if(s!==null) out.push([s,p]);
   return out;
 }
+/* Codi del temps representatiu d'AVUI, calculat a partir de les hores de sol.
+   Open-Meteo a daily.weather_code hi posa el moment MÉS significatiu del dia
+   (sovint el més ennuvolat/plujós), cosa que fa que digui "ennuvolat" tot i
+   un matí de cel serè. Aquí agafem el codi més freqüent de les hores diürnes
+   (en empat, el cel més clar; la pluja ja es descriu a part al resum). */
+function daySummaryCode(fc){
+  const h=fc.hourly, c=fc.current;
+  const dayCode=fc.daily?.weather_code?.[0];
+  if(!h?.time || !h?.weather_code || !c?.time) return dayCode;
+  const today=c.time.slice(0,10);
+  const freq=new Map();
+  for(let i=0;i<h.time.length;i++){
+    if(h.time[i].slice(0,10)!==today) continue;   // només avui
+    if(h.is_day?.[i]!==1) continue;               // només hores de sol
+    const wc=h.weather_code[i]; if(wc==null) continue;
+    freq.set(wc,(freq.get(wc)||0)+1);
+  }
+  if(!freq.size) return dayCode;                   // de nit o sense dades → codi diari
+  let best=dayCode, bestN=-1;
+  for(const [wc,n] of freq){ if(n>bestN || (n===bestN && wc<best)){ best=wc; bestN=n; } }
+  return best;
+}
 function renderSummary(loc, fc, models, air){
   const c=fc.current, d=fc.daily, h=fc.hourly;
   if(!d?.time) return '';
-  const [icon, desc] = wmo(d.weather_code[0]);
+  const dayCode=daySummaryCode(fc);
+  const [icon, desc] = wmo(dayCode);
   const tmax=Math.round(d.temperature_2m_max[0]), tmin=Math.round(d.temperature_2m_min[0]);
   const feelsMax = d.apparent_temperature_max?.[0]!=null ? Math.round(d.apparent_temperature_max[0]) : null;
   const now = new Date(c.time);
@@ -1100,7 +1123,7 @@ function renderSummary(loc, fc, models, air){
   txt += ` Ara fa <strong>${tNow}°</strong> amb un <strong>${hum}%</strong> d'humitat; la sensació és de <strong>${feelsNow}°</strong>.`;
   // Nota contextual quan les condicions actuals difereixen del resum del dia
   // (daily.weather_code = pitjor moment del dia; current pot ser diferent)
-  { const cur=c.weather_code, day=d.weather_code[0];
+  { const cur=c.weather_code, day=dayCode;
     if(cur<=1 && day>=2) txt += ` <strong>Ara el cel s'ha aclarit.</strong>`;
     else if(cur>=3 && day<=1) txt += ` Ara: <strong>${wmo(cur)[1].toLowerCase()}</strong>.`;
   }
