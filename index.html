@@ -312,6 +312,34 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   #radar-map { height:250px; }
   .radar-time { min-width:0; }
 }
+
+/* ── Modal de benvinguda (primer cop) ──────────────────────────────────────── */
+.welcome-overlay {
+  position:fixed; inset:0; z-index:900;
+  background:rgba(0,0,0,.72);
+  display:flex; align-items:center; justify-content:center;
+  padding:1rem;
+  animation:fadeIn .2s ease;
+}
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.welcome-card {
+  background:var(--bg-secondary); border:1px solid var(--border);
+  border-radius:20px; padding:1.75rem 1.5rem;
+  max-width:480px; width:100%; max-height:90vh; overflow-y:auto;
+  box-shadow:0 20px 60px var(--shadow);
+}
+.welcome-logo { font-size:2.8rem; display:block; text-align:center; margin-bottom:.55rem; }
+.welcome-card h2 { font-size:1.25rem; font-weight:800; text-align:center; margin-bottom:.35rem; }
+.welcome-card .welcome-sub { color:var(--text-secondary); font-size:.85rem; text-align:center; margin-bottom:1.4rem; }
+.welcome-features { list-style:none; display:flex; flex-direction:column; gap:.75rem; margin-bottom:1.5rem; }
+.welcome-features li { font-size:.87rem; line-height:1.5; }
+.welcome-features li strong { color:var(--accent); }
+.welcome-close {
+  width:100%; background:var(--accent); color:#fff;
+  border:none; border-radius:12px; padding:.85rem 1rem;
+  font-size:1rem; font-weight:700; cursor:pointer; transition:opacity .15s;
+}
+.welcome-close:hover { opacity:.88; }
 </style>
 </head>
 <body>
@@ -355,8 +383,9 @@ const FAV_KEY      = 'eltemps_fav';
 const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
+const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.24';
+const APP_VERSION = '1.2.25';
 const BUILD_DATE  = '2026-06-25';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1651,6 +1680,34 @@ function toggleRadarPlay(){
   }
 }
 
+/* ── Modal benvinguda (primer cop) ───────────────────────────────────────────── */
+function closeWelcome(){
+  localStorage.setItem(WELCOME_KEY,'1');
+  const el=document.getElementById('welcomeOverlay'); if(el) el.remove();
+}
+function showWelcome(){
+  if(localStorage.getItem(WELCOME_KEY)) return;
+  const d=document.createElement('div');
+  d.id='welcomeOverlay'; d.className='welcome-overlay';
+  d.innerHTML=`
+  <div class="welcome-card">
+    <span class="welcome-logo">🌤️</span>
+    <h2>Benvingut a El Temps</h2>
+    <p class="welcome-sub">Predicció meteorològica de precisió per a Catalunya i tot el món</p>
+    <ul class="welcome-features">
+      <li>🔍 <strong>Cerca qualsevol ciutat</strong> — suggeriments en temps real mentre escrius</li>
+      <li>📡 <strong>Múltiples models</strong> — consens entre ECMWF, ICON, GFS, AROME i d'altres per a la millor precisió</li>
+      <li>🌧️ <strong>Radar de pluja interactiu</strong> — passat i previsió propera en animació</li>
+      <li>⚠️ <strong>Avisos oficials</strong> — alertes de Meteoalarm i AEMET en temps real</li>
+      <li>🔗 <strong>Desa i comparteix</strong> — el resum del dia amb un sol toc</li>
+      <li>📵 <strong>Mode sense connexió</strong> — mostra l'última dada coneguda si no hi ha xarxa</li>
+      <li>😜 <strong>Targeta de benvinguda amb so</strong> — missatge meteorològic parlat, desactivat per defecte; activa'l amb el botó <strong>😜</strong> a dalt a la dreta</li>
+    </ul>
+    <button class="welcome-close" onclick="closeWelcome()">D'acord, comencem ✓</button>
+  </div>`;
+  document.body.appendChild(d);
+}
+
 /* ── Init ────────────────────────────────────────────────────────────────────── */
 (function init(){
   try {
@@ -1671,6 +1728,7 @@ function toggleRadarPlay(){
       if(recent.length) loadWeather(recent[0]);
       else loadWeather(QUICK_CITIES[0]);
     }
+    showWelcome();
   } catch(err) {
     // Fallback: mostra l'error i carrega Barcelona per evitar pantalla en blanc
     console.error('init error:', err);
