@@ -356,7 +356,7 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.23';
+const APP_VERSION = '1.2.24';
 const BUILD_DATE  = '2026-06-25';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1680,7 +1680,7 @@ function toggleRadarPlay(){
 })();
 
 /* ── Mode família (missatges divertits) ──────────────────────────────────────── */
-function funOn(){ return localStorage.getItem(FUN_KEY)!=='0'; }   // actiu per defecte
+function funOn(){ return localStorage.getItem(FUN_KEY)==='1'; }   // inactiu per defecte
 function toggleFun(){ localStorage.setItem(FUN_KEY, funOn()?'0':'1'); applyFun(); }
 function updateFunBtn(){
   const b=$('fun-toggle'); if(!b) return;
