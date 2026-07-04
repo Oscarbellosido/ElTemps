@@ -82,6 +82,7 @@ h1 .plus { color: var(--accent); }
 .fun-speak-btn:hover { opacity:1; transform:scale(1.2); }
 .fun-birthday { display:block; background:rgba(251,191,36,.18); border:1.5px solid rgba(251,191,36,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--warn); }
 .fun-event { display:block; background:rgba(74,222,128,.15); border:1.5px solid rgba(74,222,128,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--good); }
+.fun-special { margin-bottom:.8rem; }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
 .search-wrap { position: relative; }
@@ -385,8 +386,8 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.25';
-const BUILD_DATE  = '2026-06-25';
+const APP_VERSION = '1.2.26';
+const BUILD_DATE  = '2026-07-04';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1039,6 +1040,7 @@ function insertAlertHtml(html){
 /* ── Render ──────────────────────────────────────────────────────────────────── */
 function render(loc, fc, models, air, marine){
   const html = [
+    renderSpecial(fc),
     renderFun(loc, fc),
     renderSummary(loc, fc, models, air),
     renderNow(loc, fc),
@@ -1749,7 +1751,10 @@ function applyFun(){
   updateFunBtn();
   const old=$('funBanner'); if(old) old.remove();
   if(funOn() && currentLoc && currentFc){
-    $('result').insertAdjacentHTML('afterbegin', renderFun(currentLoc, currentFc));
+    const sp=$('specialBanner');
+    const html=renderFun(currentLoc, currentFc);
+    if(sp) sp.insertAdjacentHTML('afterend', html);
+    else $('result').insertAdjacentHTML('afterbegin', html);
     autoPlayFun();
   }
 }
@@ -1805,6 +1810,17 @@ function familyFor(loc){
   for(const f of FAMILY){ if(n===normTxt(f.town)) return f; }              // per nom (cerca/recents)
   for(const f of FAMILY){ if(Math.hypot(f.lat-loc.lat,f.lon-loc.lon)<0.03) return f; }  // per coordenades (geo)
   return null;
+}
+
+function renderSpecial(fc){
+  const bdays=todaysBirthdays();
+  const evts=todaysEvents();
+  if(!bdays.length && !evts.length) return '';
+  const bdayHtml=bdays.length
+    ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Molts anys! 🎉</span>`
+    : '';
+  const evtHtml=evts.map(e=>`<span class="fun-event">${esc(e.msg)}</span>`).join('');
+  return `<div class="fun-special" id="specialBanner">${evtHtml}${bdayHtml}</div>`;
 }
 
 function renderFun(loc, fc){
@@ -1935,11 +1951,6 @@ function renderFun(loc, fc){
   const bdays=todaysBirthdays();
   const evts=todaysEvents();
   if(bdays.length||evts.length) wtype='birthday';
-  const bdayHtml=bdays.length
-    ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Molts anys! 🎉</span>`
-    : '';
-  const evtHtml=evts.map(e=>`<span class="fun-event">${esc(e.msg)}</span>`).join('');
-  const specialEmoji=bdays.length?'🎂':evts.length?'🥳':emoji;
 
   const fam=familyFor(loc);
   const greet = fam ? `<span class="fun-greet">${funPick(FUN_GREETS)(esc(joinNames(fam.names)))}</span>` : '';
@@ -1963,8 +1974,8 @@ function renderFun(loc, fc){
   }
 
   return `<div class="fun-banner" id="funBanner" data-wtype="${wtype}">
-    <span class="fun-emoji">${specialEmoji}</span>
-    <div class="fun-text">${evtHtml}${bdayHtml}${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}${rainSoonHtml}</div>
+    <span class="fun-emoji">${emoji}</span>
+    <div class="fun-text">${greet}${esc(funPick(msgs))}${extra?`<span class="extra">${esc(extra)}</span>`:''}${rainSoonHtml}</div>
     <button class="fun-speak-btn" onclick="onFunSpeak()" title="Escolta el missatge">🔊</button>
   </div>`;
 }
