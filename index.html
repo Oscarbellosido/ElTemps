@@ -82,6 +82,7 @@ h1 .plus { color: var(--accent); }
 .fun-speak-btn:hover { opacity:1; transform:scale(1.2); }
 .fun-birthday { display:block; background:rgba(251,191,36,.18); border:1.5px solid rgba(251,191,36,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--warn); }
 .fun-event { display:block; background:rgba(74,222,128,.15); border:1.5px solid rgba(74,222,128,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--good); }
+.fun-saint { display:block; background:rgba(148,163,184,.15); border:1px solid rgba(148,163,184,.4); border-radius:10px; padding:.3rem .7rem; margin-bottom:.45rem; font-size:.85rem; font-weight:600; color:var(--text-secondary); }
 .fun-special { margin-bottom:.8rem; }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
@@ -386,7 +387,7 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.27';
+const APP_VERSION = '1.2.28';
 const BUILD_DATE  = '2026-07-04';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1795,6 +1796,112 @@ const EVENTS = [
 function todaysEvents(){
   const n=new Date(); return EVENTS.filter(e=>e.m===n.getMonth()+1&&e.d===n.getDate());
 }
+
+/* Santoral (sant/onomàstica del dia, calendari català/espanyol). Clau "mes-dia" sense zeros inicials. */
+const SAINTS = {
+  "1-1":"Cap d'Any / Maria, Mare de Déu", "1-2":"Basili i Gregori", "1-3":"Genoveva", "1-4":"Àngela de Foligno",
+  "1-5":"Simó Estilita", "1-6":"Reis / Gaspar, Melcior, Baltasar", "1-7":"Raimon de Penyafort", "1-8":"Julià",
+  "1-9":"Adrià", "1-10":"Guillem", "1-11":"Higini", "1-12":"Arcadi", "1-13":"Hilari de Poitiers",
+  "1-14":"Fèlix de Nola", "1-15":"Maur", "1-16":"Marcel", "1-17":"Antoni Abat", "1-18":"Prisca",
+  "1-19":"Mario i Marta", "1-20":"Sebastià", "1-21":"Agnès", "1-22":"Vicenç", "1-23":"Ildefons",
+  "1-24":"Francesc de Sales", "1-25":"Conversió de Sant Pau", "1-26":"Timoteu i Titus", "1-27":"Àngela Mèrici",
+  "1-28":"Tomàs d'Aquino", "1-29":"Constanci", "1-30":"Martina", "1-31":"Joan Bosco",
+
+  "2-1":"Cecili", "2-2":"La Candelera", "2-3":"Blai", "2-4":"Andreu Corsini", "2-5":"Àgata",
+  "2-6":"Dorotea", "2-7":"Ricard", "2-8":"Jeroni Emilià", "2-9":"Apolònia", "2-10":"Escolàstica",
+  "2-11":"Mare de Déu de Lourdes", "2-12":"Eulàlia de Barcelona", "2-13":"Beatriu", "2-14":"Valentí",
+  "2-15":"Faustí i Jovita", "2-16":"Onèsim", "2-17":"Alexi", "2-18":"Simeó", "2-19":"Àlvar",
+  "2-20":"Elèuter", "2-21":"Pere Damià", "2-22":"Càtedra de Sant Pere", "2-23":"Policarp", "2-24":"Sergi",
+  "2-25":"Cesari", "2-26":"Alexandre", "2-27":"Gabriel de la Dolorosa", "2-28":"Roman",
+
+  "3-1":"Rosendo", "3-2":"Onorat", "3-3":"Emeteri i Celdoni", "3-4":"Casimir", "3-5":"Adrià",
+  "3-6":"Marcià", "3-7":"Perpètua i Felicitat", "3-8":"Joan de Déu", "3-9":"Frances Romana",
+  "3-10":"Simplici", "3-11":"Ramir", "3-12":"Fina", "3-13":"Rodrigo", "3-14":"Matilde",
+  "3-15":"Lluïsa de Marillac", "3-16":"Heribert", "3-17":"Patrici", "3-18":"Ciril de Jerusalem",
+  "3-19":"Josep", "3-20":"Fèlix", "3-21":"Benet", "3-22":"Deogràcies", "3-23":"Josep Oriol",
+  "3-24":"Simó", "3-25":"Anunciació de Maria", "3-26":"Braulio", "3-27":"Ruperto", "3-28":"Sixt",
+  "3-29":"Eustasi", "3-30":"Joan Clímac", "3-31":"Balbina",
+
+  "4-1":"Hug", "4-2":"Francesc de Paula", "4-3":"Ricard", "4-4":"Isidor de Sevilla", "4-5":"Vicenç Ferrer",
+  "4-6":"Guillem", "4-7":"Joan Baptista de la Salle", "4-8":"Dionís", "4-9":"Maria Cleofàs",
+  "4-10":"Ezequiel", "4-11":"Estanislau", "4-12":"Juli I", "4-13":"Martí I", "4-14":"Valerià",
+  "4-15":"Anastàsia", "4-16":"Fructuós", "4-17":"Aniceto", "4-18":"Perfecte", "4-19":"Lleó IX",
+  "4-20":"Agnès de Montepulciano", "4-21":"Anselm", "4-22":"Sotero i Gai", "4-23":"Jordi",
+  "4-24":"Fidel de Sigmaringen", "4-25":"Marc", "4-26":"Isidor", "4-27":"Zita", "4-28":"Pere Chanel",
+  "4-29":"Caterina de Siena", "4-30":"Pius V",
+
+  "5-1":"Josep Obrer", "5-2":"Atanasi", "5-3":"Felip i Jaume", "5-4":"Florià", "5-5":"Àngel",
+  "5-6":"Domènec Savio", "5-7":"Flavia", "5-8":"Acaci", "5-9":"Gregori Nazianzè", "5-10":"Antonino",
+  "5-11":"Anastasi", "5-12":"Nereu i Aquil·leu", "5-13":"Mare de Déu de Fàtima", "5-14":"Maties",
+  "5-15":"Isidre Llaurador", "5-16":"Ubald", "5-17":"Pasqual Bailón", "5-18":"Joan I", "5-19":"Ivo",
+  "5-20":"Bernardí de Siena", "5-21":"Eugeni de Còrdova", "5-22":"Rita de Càssia", "5-23":"Desideri",
+  "5-24":"Maria Auxiliadora", "5-25":"Beda el Venerable", "5-26":"Felip Neri", "5-27":"Agustí de Canterbury",
+  "5-28":"Just", "5-29":"Maximí", "5-30":"Ferran", "5-31":"Visitació de Maria",
+
+  "6-1":"Justí", "6-2":"Marcel·lí i Pere", "6-3":"Carles Lwanga", "6-4":"Francesc Caracciolo",
+  "6-5":"Bonifaci", "6-6":"Norbert", "6-7":"Robert", "6-8":"Medard", "6-9":"Efrem", "6-10":"Maurici",
+  "6-11":"Bernabé", "6-12":"Onofre", "6-13":"Antoni de Pàdua", "6-14":"Elies", "6-15":"Vito",
+  "6-16":"Aureli", "6-17":"Rainer", "6-18":"Marina", "6-19":"Romuald", "6-20":"Silveri",
+  "6-21":"Lluís Gonçaga", "6-22":"Paulí de Nola", "6-23":"Josep Cafasso", "6-24":"Sant Joan (Joan Baptista)",
+  "6-25":"Guillem", "6-26":"Pelagi", "6-27":"Ciril d'Alexandria", "6-28":"Ireneu",
+  "6-29":"Sant Pere (Pere i Pau)", "6-30":"Protomàrtirs de Roma",
+
+  "7-1":"Estera", "7-2":"Ot", "7-3":"Tomàs Apòstol", "7-4":"Isabel de Portugal", "7-5":"Antoni Maria Zaccaria",
+  "7-6":"Maria Goretti", "7-7":"Fermí", "7-8":"Elisabet", "7-9":"Zenó", "7-10":"Amàlia",
+  "7-11":"Olga / Benet", "7-12":"Joan Gualbert", "7-13":"Enric", "7-14":"Camil de Lellis",
+  "7-15":"Bonaventura", "7-16":"Mare de Déu del Carme", "7-17":"Alexis", "7-18":"Frederic",
+  "7-19":"Simó", "7-20":"Elies", "7-21":"Llorenç de Brindisi", "7-22":"Maria Magdalena",
+  "7-23":"Brígida", "7-24":"Cristina", "7-25":"Santiago", "7-26":"Joaquim i Anna", "7-27":"Pantaleó",
+  "7-28":"Nazari i Celso", "7-29":"Marta", "7-30":"Pere Crisòleg", "7-31":"Ignasi de Loiola",
+
+  "8-1":"Alfons Maria de Ligori", "8-2":"Eusebi de Verceli", "8-3":"Lídia", "8-4":"Joan Maria Vianney",
+  "8-5":"Mare de Déu de les Neus", "8-6":"Transfiguració del Senyor", "8-7":"Sixt II", "8-8":"Domènec",
+  "8-9":"Teresa Benedicta de la Creu", "8-10":"Llorenç", "8-11":"Clara d'Assís", "8-12":"Hilari",
+  "8-13":"Ponç", "8-14":"Maximilià Kolbe", "8-15":"Assumpció de Maria", "8-16":"Roc", "8-17":"Jacint",
+  "8-18":"Elena", "8-19":"Joan Eudes", "8-20":"Bernat de Claravall", "8-21":"Pius X", "8-22":"Maria Reina",
+  "8-23":"Rosa de Lima", "8-24":"Bartomeu", "8-25":"Josep de Calassanç", "8-26":"Adrià", "8-27":"Mònica",
+  "8-28":"Agustí", "8-29":"Martiri de Sant Joan Baptista", "8-30":"Fèlix i Adaucte", "8-31":"Ramon Nonat",
+
+  "9-1":"Gil", "9-2":"Elpidi", "9-3":"Gregori Magne", "9-4":"Rosalia", "9-5":"Teresa de Calcuta",
+  "9-6":"Zacaries", "9-7":"Regina", "9-8":"Nativitat de Maria", "9-9":"Pere Claver",
+  "9-10":"Nicolau de Tolentino", "9-11":"Protus i Jacint", "9-12":"Nom de Maria", "9-13":"Joan Crisòstom",
+  "9-14":"Exaltació de la Santa Creu", "9-15":"Mare de Déu dels Dolors", "9-16":"Cornelio i Cebrià",
+  "9-17":"Robert Bel·larmí", "9-18":"Josep de Copertino", "9-19":"Jenar", "9-20":"Andreu Kim",
+  "9-21":"Mateu", "9-22":"Maurici", "9-23":"Pius de Pietrelcina", "9-24":"Mare de Déu de la Mercè",
+  "9-25":"Sergi", "9-26":"Cosme i Damià", "9-27":"Vicenç de Paül", "9-28":"Wenceslau",
+  "9-29":"Miquel, Gabriel i Rafael", "9-30":"Jeroni",
+
+  "10-1":"Teresa de l'Infant Jesús", "10-2":"Àngels Custodis", "10-3":"Gerard", "10-4":"Francesc d'Assís",
+  "10-5":"Plàcid", "10-6":"Bru", "10-7":"Mare de Déu del Rosari", "10-8":"Pelagia", "10-9":"Dionís",
+  "10-10":"Francesc de Borja", "10-11":"Joan XXIII", "10-12":"Mare de Déu del Pilar", "10-13":"Eduard",
+  "10-14":"Calixte I", "10-15":"Teresa de Jesús (d'Àvila)", "10-16":"Margarida Maria Alacoque",
+  "10-17":"Ignasi d'Antioquia", "10-18":"Sant Lluc", "10-19":"Pau de la Creu", "10-20":"Irene",
+  "10-21":"Úrsula", "10-22":"Joan Pau II", "10-23":"Joan de Capistrano", "10-24":"Antoni Maria Claret",
+  "10-25":"Crispí i Crispinià", "10-26":"Evarist", "10-27":"Fructuós", "10-28":"Simó i Judes",
+  "10-29":"Narcís", "10-30":"Marcià", "10-31":"Quintí",
+
+  "11-1":"Tots Sants", "11-2":"Fidels Difunts", "11-3":"Martí de Porres", "11-4":"Carles Borromeo",
+  "11-5":"Zacaries i Elisabet", "11-6":"Sever", "11-7":"Ernest", "11-8":"Godofred",
+  "11-9":"Dedicació de la Basílica del Laterà", "11-10":"Lleó Magne", "11-11":"Martí de Tours",
+  "11-12":"Josafat", "11-13":"Diego", "11-14":"Serapió", "11-15":"Albert Magne",
+  "11-16":"Margarida d'Escòcia", "11-17":"Isabel d'Hongria", "11-18":"Odó", "11-19":"Ponç",
+  "11-20":"Fèlix de Valois", "11-21":"Presentació de Maria", "11-22":"Cecília", "11-23":"Climent I",
+  "11-24":"Andreu Dung-Lac", "11-25":"Caterina d'Alexandria", "11-26":"Delfina", "11-27":"Virgili",
+  "11-28":"Sostenes", "11-29":"Saturní", "11-30":"Sant Andreu",
+
+  "12-1":"Eloi", "12-2":"Bibiana", "12-3":"Francesc Xavier", "12-4":"Bàrbara", "12-5":"Sabas",
+  "12-6":"Nicolau de Bari", "12-7":"Ambròs", "12-8":"Immaculada Concepció", "12-9":"Joan Diego",
+  "12-10":"Eulàlia de Mèrida", "12-11":"Dàmas I", "12-12":"Mare de Déu de Guadalupe", "12-13":"Llúcia",
+  "12-14":"Joan de la Creu", "12-15":"Maria di Rosa", "12-16":"Albina", "12-17":"Llàtzer",
+  "12-18":"Gracià", "12-19":"Fausta", "12-20":"Domènec de Silos", "12-21":"Pere Canisi",
+  "12-22":"Francesca Xaviera Cabrini", "12-23":"Joan de Kety", "12-24":"Nit de Nadal", "12-25":"Nadal",
+  "12-26":"Sant Esteve", "12-27":"Joan Evangelista", "12-28":"Sants Innocents", "12-29":"Tomàs Becket",
+  "12-30":"Sagrada Família", "12-31":"Silvestre I",
+};
+function todaysSaint(){
+  const n=new Date(); return SAINTS[`${n.getMonth()+1}-${n.getDate()}`] || null;
+}
+
 /* Salutacions que van variant (totes valen per a una o més persones) */
 const FUN_GREETS = [
   n=>`👋 Ei, ${n}!`,
@@ -1815,12 +1922,16 @@ function familyFor(loc){
 function renderSpecial(fc){
   const bdays=todaysBirthdays();
   const evts=todaysEvents();
-  if(!bdays.length && !evts.length) return '';
+  const saint=todaysSaint();
+  if(!bdays.length && !evts.length && !saint) return '';
   const bdayHtml=bdays.length
     ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Molts anys! 🎉</span>`
     : '';
   const evtHtml=evts.map(e=>`<span class="fun-event">${esc(e.msg)}</span>`).join('');
-  return `<div class="fun-special" id="specialBanner">${evtHtml}${bdayHtml}</div>`;
+  const saintHtml=saint
+    ? `<span class="fun-saint">🙏 Sant/a: <strong>${esc(saint)}</strong></span>`
+    : '';
+  return `<div class="fun-special" id="specialBanner">${evtHtml}${bdayHtml}${saintHtml}</div>`;
 }
 
 function renderFun(loc, fc){
