@@ -263,6 +263,38 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .hour-chart .temp-lbl { fill:var(--text-primary); font-size:10px; font-weight:700; }
 .hour-chart .precip-lbl { fill:var(--accent); font-size:9px; font-weight:600; }
 
+/* ── Mesos vinents (tendència estacional) ───────────────────────────────────── */
+.out-warn { display:flex; gap:.55rem; align-items:flex-start; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.3); border-radius:12px; padding:.7rem .9rem; font-size:.75rem; color:var(--warn); line-height:1.55; margin-bottom:1.1rem; }
+.out-warn strong { color:var(--warn); }
+.out-sub { font-size:.7rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin:1.35rem 0 .65rem; display:flex; align-items:center; gap:.4rem; }
+.out-sub:first-child { margin-top:0; }
+.out-head { display:grid; grid-template-columns:4.6rem 1fr 1fr; gap:.5rem; font-size:.63rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; padding-bottom:.3rem; }
+.out-month { display:grid; grid-template-columns:4.6rem 1fr 1fr; gap:.5rem; align-items:center; padding:.4rem 0; border-top:1px solid var(--border); }
+.out-month .omn { font-weight:700; font-size:.82rem; }
+.out-month .omn small { display:block; font-weight:400; font-size:.6rem; color:var(--text-secondary); }
+.out-bar { position:relative; height:36px; border-radius:8px; background:var(--bg-card); border:1px solid var(--border); overflow:hidden; }
+.out-bar .fill { position:absolute; top:0; bottom:0; opacity:.42; }
+.out-bar .mid { position:absolute; top:0; bottom:0; left:50%; width:1px; background:var(--text-secondary); opacity:.45; }
+/* El color el porta la barra, no la lletra: així el text es llegeix igual de bé
+   en tema clar i en tema fosc (el groc o el vermell clars sobre fons clar no es veuen) */
+.out-bar .txt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.66rem; font-weight:700; text-align:center; line-height:1.25; color:var(--text-primary); }
+.out-risk { display:flex; gap:.75rem; align-items:flex-start; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:.85rem .95rem; }
+.out-risk .ric { font-size:1.8rem; line-height:1; flex-shrink:0; }
+.out-risk .rtxt { flex:1; min-width:0; }
+.out-risk .rlvl { font-weight:800; font-size:.95rem; }
+.out-risk .rdesc { font-size:.73rem; color:var(--text-secondary); line-height:1.6; margin-top:.2rem; }
+.out-risk .rdesc b { color:var(--text-primary); font-weight:700; }
+.out-enso { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:.85rem .95rem; }
+.out-enso .oni { font-size:1rem; font-weight:800; display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+.out-enso .odesc { font-size:.73rem; color:var(--text-secondary); line-height:1.6; margin-top:.3rem; }
+.out-spark { display:flex; align-items:flex-end; gap:2px; height:26px; margin-top:.55rem; }
+.out-spark span { flex:1; min-width:3px; border-radius:2px 2px 0 0; }
+.out-skel { color:var(--text-secondary); font-size:.82rem; padding:.4rem 0; }
+@media (max-width:520px){
+  .out-head, .out-month { grid-template-columns:3.5rem 1fr 1fr; gap:.3rem; }
+  .out-bar .txt { font-size:.6rem; }
+}
+
 /* ── Misc ───────────────────────────────────────────────────────────────────── */
 #result { display:none; }
 #result.show { display:block; animation:fadeSlide .35s ease-out; }
@@ -386,8 +418,8 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.2.29';
-const BUILD_DATE  = '2026-07-04';
+const APP_VERSION = '1.3.0';
+const BUILD_DATE  = '2026-07-30';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1050,11 +1082,13 @@ function render(loc, fc, models, air, marine){
     renderAir(air),
     renderRadar(),
     renderConsensus(models),
+    renderOutlook(),
   ].filter(Boolean).join('');
   $('result').innerHTML = html;
   if(funOn()) autoPlayFun();
   if(models) wireConsensus(models);
   scheduleRadar(loc);
+  scheduleOutlook(loc);
   try{ setWeatherFx(fc.current.weather_code, fc.current.is_day===1); }catch{}
 }
 
@@ -1504,6 +1538,596 @@ function setConsensusDay(day){
       Dispersió de la temperatura màxima entre models: <strong>${r1(spread)}°C</strong> (±${r1(sd)}°C).
       Pluja: ${prText}.
     </div>`;
+}
+
+/* ── Mesos vinents: tendència estacional, El Niño, incendis i crescudes ──────── */
+/* Tot aquest bloc és, per naturalesa, de fiabilitat BAIXA: més enllà de dues setmanes
+   ja no hi ha predicció del temps, només tendències. Per això va al final i ben etiquetat.
+   Fonts: CFSv2 (NOAA) per a la tendència fins a 7 mesos, ERA5 1995-2024 per a la normal
+   climàtica, GloFAS per al cabal dels rius i l'índex ONI del CPC per a El Niño / La Niña.
+   Es carrega tard (quan la targeta entra en pantalla) perquè són ~350 KB de dades. */
+const SEAS_DAYS = 210;                  // l'API estacional accepta fins a 216 dies
+const NORM_Y0 = 1995, NORM_Y1 = 2024;   // període de referència de la normal climàtica
+const RIV_Y0  = 1994, RIV_Y1  = 2024;   // històric de cabal per als llindars de crescuda
+const OUT_TTL = { seas: 6*36e5, normals: 180*864e5, enso: 3*864e5, river: 90*864e5 };
+const MONTHS_LONG = ['gener','febrer','març','abril','maig','juny','juliol','agost','setembre','octubre','novembre','desembre'];
+/* "l'agost", "l'octubre"… però "el gener": apostrofa davant de vocal */
+const elMes = m => (/^[aeiou]/.test(MONTHS_LONG[m]) ? 'l\'' : 'el ') + MONTHS_LONG[m];
+/* Trigrames de l'índex ONI (DJF = des-gen-feb…) → primer i últim mes del trimestre */
+const ONI_SEAS = { DJF:[11,1], JFM:[0,2], FMA:[1,3], MAM:[2,4], AMJ:[3,5], MJJ:[4,6],
+                   JJA:[5,7], JAS:[6,8], ASO:[7,9], SON:[8,10], OND:[9,11], NDJ:[10,0] };
+
+function cacheGet(key, ttl){
+  try{ const o=JSON.parse(localStorage.getItem(key)||'null');
+    if(o && typeof o.ts==='number' && Date.now()-o.ts < ttl) return o.v; }catch{}
+  return null;
+}
+function cacheSet(key, v){
+  try{ localStorage.setItem(key, JSON.stringify({ ts:Date.now(), v })); }catch{}   // quota plena: no és crític
+}
+async function outFetch(url, ms=15000){
+  const r=await fetch(url,{signal:AbortSignal.timeout(ms)});
+  if(!r.ok) throw new Error('http '+r.status);
+  const j=await r.json();
+  if(j && j.error) throw new Error(j.reason||'api');
+  return j;
+}
+function sdev(a){
+  if(a.length<3) return null;
+  const m=a.reduce((x,y)=>x+y,0)/a.length;
+  return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/(a.length-1));
+}
+function kmBetween(a,b,c,d){
+  const R=6371, dl=(c-a)*Math.PI/180, dg=(d-b)*Math.PI/180, m=(a+c)/2*Math.PI/180;
+  return R*Math.hypot(dl, dg*Math.cos(m));
+}
+
+/* ── Tendència estacional (CFSv2, ensemble de 50 membres) ────────────────────── */
+async function fetchSeasonal(loc){
+  const ck=`eltemps_seas_${loc.lat.toFixed(1)},${loc.lon.toFixed(1)}`;
+  const c=cacheGet(ck, OUT_TTL.seas); if(c) return c;
+  const j=await outFetch(`https://seasonal-api.open-meteo.com/v1/seasonal?latitude=${loc.lat}&longitude=${loc.lon}`
+    + `&daily=temperature_2m_max,precipitation_sum&forecast_days=${SEAS_DAYS}`, 22000);
+  const v=aggSeasonal(j);          // guardem només els agregats mensuals, no els 210 dies × 100 sèries
+  cacheSet(ck, v); return v;
+}
+/* Agrupa l'ensemble per mes de calendari. Guardem el valor mensual de CADA membre:
+   així podem dir "38 de 50 membres donen un mes més càlid del normal", que és molt més
+   honest que una xifra única. Es descarten els mesos incomplets (< 10 dies) i els
+   membres que no cobreixen tot el mes (els membres tenen llargades diferents). */
+function aggSeasonal(j){
+  const d=j.daily||{};
+  const tK=Object.keys(d).filter(k=>/^temperature_2m_max_member\d+$/.test(k));
+  const pK=Object.keys(d).filter(k=>/^precipitation_sum_member\d+$/.test(k));
+  if(!d.time || !tK.length) throw new Error('estacional sense dades');
+  const by=new Map();
+  d.time.forEach((iso,i)=>{
+    const k=iso.slice(0,7); let o=by.get(k);
+    if(!o){ o={ y:+iso.slice(0,4), m:+iso.slice(5,7)-1, first:+iso.slice(8,10), last:0, n:0,
+                t:tK.map(()=>({s:0,n:0})), p:pK.map(()=>({s:0,n:0})) }; by.set(k,o); }
+    o.n++; o.last=+iso.slice(8,10);
+    tK.forEach((k2,x)=>{ const v=d[k2][i]; if(v!=null){ o.t[x].s+=v; o.t[x].n++; } });
+    pK.forEach((k2,x)=>{ const v=d[k2][i]; if(v!=null){ o.p[x].s+=v; o.p[x].n++; } });
+  });
+  const months=[...by.values()]
+    .filter(o=>o.n>=10)
+    .map(o=>({ y:o.y, m:o.m, first:o.first, last:o.last, days:o.n,
+               tm:o.t.filter(x=>x.n===o.n).map(x=>Math.round(x.s/x.n*100)/100),
+               pm:o.p.filter(x=>x.n===o.n).map(x=>Math.round(x.s*10)/10) }))
+    .filter(o=>o.tm.length>=10);
+  if(!months.length) throw new Error('estacional sense mesos útils');
+  return { lat:j.latitude, lon:j.longitude, months };
+}
+
+/* ── Normal climàtica 1995-2024 (ERA5, al mateix punt de graella) ─────────────── */
+async function fetchNormals(lat, lon){
+  const ck=`eltemps_normals_${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const c=cacheGet(ck, OUT_TTL.normals); if(c) return c;
+  const j=await outFetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}`
+    + `&start_date=${NORM_Y0}-01-01&end_date=${NORM_Y1}-12-31`
+    + `&daily=temperature_2m_max,precipitation_sum&timezone=GMT`, 28000);
+  const v=buildNormals(j);
+  cacheSet(ck, v); return v;
+}
+/* Construeix la normal dia a dia (casella mes*31+dia, així no cal patir pels 29 de febrer)
+   i la variabilitat any a any de cada mes, que és la que diu què és "sortir del normal". */
+function buildNormals(j){
+  const d=j.daily;
+  if(!d?.time?.length) throw new Error('normal sense dades');
+  const S=12*31;
+  const tS=new Array(S).fill(0), tN=new Array(S).fill(0);
+  const pS=new Array(S).fill(0), pN=new Array(S).fill(0);
+  const mon=new Map();
+  d.time.forEach((iso,i)=>{
+    const m=+iso.slice(5,7)-1, day=+iso.slice(8,10), s=m*31+day-1;
+    const tv=d.temperature_2m_max[i], pv=d.precipitation_sum[i];
+    if(tv!=null){ tS[s]+=tv; tN[s]++; }
+    if(pv!=null){ pS[s]+=pv; pN[s]++; }
+    const mk=iso.slice(0,7); let o=mon.get(mk);
+    if(!o){ o={ m, tS:0, tN:0, p:0 }; mon.set(mk,o); }
+    if(tv!=null){ o.tS+=tv; o.tN++; }
+    if(pv!=null) o.p+=pv;
+  });
+  if(!tN.some(n=>n>0)) throw new Error('normal buida');
+  // Suavitzat amb finestra de ±7 dies: 30 anys × 15 dies ≈ 450 mostres per casella,
+  // prou per treure el soroll sense esborrar el cicle anual.
+  const tdy=new Array(S).fill(null), pdy=new Array(S).fill(null);
+  for(let s=0;s<S;s++){
+    if(!tN[s] && !pN[s]) continue;
+    let ts=0,tn=0,ps=0,pn=0;
+    for(let k=-7;k<=7;k++){
+      const q=(s+k+S)%S;
+      if(tN[q]){ ts+=tS[q]; tn+=tN[q]; }
+      if(pN[q]){ ps+=pS[q]; pn+=pN[q]; }
+    }
+    if(tn) tdy[s]=Math.round(ts/tn*100)/100;
+    if(pn) pdy[s]=Math.round(ps/pn*1000)/1000;
+  }
+  const all=[...mon.values()], tsd=[], psd=[];
+  for(let m=0;m<12;m++){
+    const full=all.filter(o=>o.m===m && o.tN>=25);
+    tsd[m]=sdev(full.map(o=>o.tS/o.tN));
+    psd[m]=sdev(full.map(o=>o.p));
+  }
+  return { tdy, pdy,
+           tsd:tsd.map(v=>v==null?null:Math.round(v*100)/100),
+           psd:psd.map(v=>v==null?null:Math.round(v*10)/10),
+           y0:NORM_Y0, y1:NORM_Y1 };
+}
+/* Normal d'un tram de dies del mes (serveix també per a mesos a mitges) */
+function normRange(nor, m, first, last){
+  let ts=0, tn=0, ps=0, pn=0;
+  for(let day=first; day<=last; day++){
+    const s=m*31+day-1;
+    if(nor.tdy[s]!=null){ ts+=nor.tdy[s]; tn++; }
+    if(nor.pdy[s]!=null){ ps+=nor.pdy[s]; pn++; }
+  }
+  return { t: tn?ts/tn:null, p: pn?ps:null, days:pn };
+}
+/* Normal de pluja acumulada entre dues dates (per al dèficit dels últims 3 mesos) */
+function normSpan(nor, isoFrom, isoTo){
+  let p=0, n=0;
+  const d=new Date(isoFrom+'T00:00:00Z'), end=new Date(isoTo+'T00:00:00Z');
+  while(d<=end && n<400){
+    const s=d.getUTCMonth()*31 + d.getUTCDate()-1;
+    if(nor.pdy[s]!=null){ p+=nor.pdy[s]; n++; }
+    d.setUTCDate(d.getUTCDate()+1);
+  }
+  return { p, n };
+}
+/* Pluja realment caiguda els últims 92 dies (indicador de sequera amb skill real) */
+async function fetchRecentPrecip(lat, lon){
+  const j=await outFetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + `&daily=precipitation_sum&past_days=92&forecast_days=1&timezone=GMT`, 12000);
+  const t=j.daily.time, p=j.daily.precipitation_sum;
+  let sum=0, n=0, first=null, last=null;
+  for(let i=0;i<t.length-1;i++){         // l'últim dia és avui, encara incomplet
+    if(p[i]==null) continue;
+    sum+=p[i]; n++; if(!first) first=t[i]; last=t[i];
+  }
+  return n>=60 ? { sum, n, first, last } : null;
+}
+
+/* ── Categories d'anomalia ───────────────────────────────────────────────────── */
+/* Els llindars van en desviacions típiques del lloc: així "més càlid del normal"
+   vol dir el mateix a Lleida que a l'Alt Pirineu. */
+function tempCat(anom, sd){
+  const s=sd || 1.2;
+  if(anom >=  1.5*s) return ['Molt més càlid','var(--bad)'];
+  if(anom >=  0.6*s) return ['Més càlid','var(--warm)'];
+  if(anom <= -1.5*s) return ['Molt més fred','var(--cold)'];
+  if(anom <= -0.6*s) return ['Més fred','var(--cold)'];
+  return ['Dins del normal','var(--text-secondary)'];
+}
+function precipCat(ratio){
+  if(ratio==null) return ['—','var(--text-secondary)'];
+  if(ratio < 0.5)  return ['Molt sec','var(--warm)'];
+  if(ratio < 0.8)  return ['Sec','var(--warn)'];
+  if(ratio <= 1.25) return ['Normal','var(--text-secondary)'];
+  if(ratio <= 1.75) return ['Plujós','var(--accent)'];
+  return ['Molt plujós','var(--accent-2)'];
+}
+/* Uneix tendència i normal en una fila per mes */
+function outlookRows(seas, nor){
+  const rows=[];
+  for(const mo of seas.months){
+    const nr=normRange(nor, mo.m, mo.first, mo.last);
+    if(nr.t==null) continue;
+    const tMean=mo.tm.reduce((a,b)=>a+b,0)/mo.tm.length;
+    const pMean=mo.pm.length ? mo.pm.reduce((a,b)=>a+b,0)/mo.pm.length : null;
+    const frac=nr.days/31;                              // mesos a mitges: escalem la variabilitat
+    const anom=tMean-nr.t;
+    const warmN=mo.tm.filter(v=>v>nr.t).length;
+    const ratio=(pMean!=null && nr.p>1) ? pMean/nr.p : null;
+    const dryN=(pMean!=null && nr.p!=null) ? mo.pm.filter(v=>v<nr.p).length : null;
+    rows.push({ y:mo.y, m:mo.m, days:mo.days, partial:mo.days<26,
+                first:mo.first, last:mo.last,
+                anom, tNorm:nr.t, tSd:nor.tsd[mo.m], nMem:mo.tm.length, warmN,
+                ratio, pFc:pMean, pNorm:nr.p, pSd:nor.psd[mo.m]!=null?nor.psd[mo.m]*frac:null, dryN });
+  }
+  return rows;
+}
+
+/* ── Risc d'incendi forestal (índex propi, NO oficial) ───────────────────────── */
+/* Open-Meteo no serveix cap Fire Weather Index, així que el component el calculem
+   nosaltres amb quatre ingredients que sí que tenim i que són els que manen a mesos
+   vista: la sequera acumulada, la pluja prevista, la calor prevista i com de perillós
+   és aquest tram de l'any en aquest lloc concret. Cal dir clarament que és orientatiu:
+   l'oficial a Catalunya és el Pla ALFA de Bombers i Agents Rurals. */
+const FIRE_LVL = [
+  { max:25,  lbl:'Baix',      ic:'🟢', col:'var(--good)' },
+  { max:45,  lbl:'Moderat',   ic:'🟡', col:'var(--warn)' },
+  { max:65,  lbl:'Alt',       ic:'🟠', col:'var(--warm)' },
+  { max:82,  lbl:'Molt alt',  ic:'🔴', col:'var(--bad)' },
+  { max:101, lbl:'Extrem',    ic:'🟣', col:'#c026d3' },
+];
+function fireRisk(rows, recent, nor){
+  const next=rows.slice(0,3);
+  if(!next.length) return null;
+  // On amb prou feines plou tot l'any (desert) no hi ha vegetació contínua per cremar:
+  // un índex fet només amb el temps no ho sap, i sortiria un risc que no té sentit.
+  const anual=nor.pdy.reduce((a,v)=>a+(v||0),0);
+  if(anual<200) return null;
+  const parts=[];
+  let score=0;
+
+  // 1) Sequera acumulada (0-35): el que ja tenim al terreny
+  let r90=null;
+  if(recent && nor){
+    const ns=normSpan(nor, recent.first, recent.last);
+    if(ns.p>5){
+      r90=recent.sum/ns.p;
+      score += Math.max(0, Math.min(1, (1-r90)/0.7)) * 35;
+      parts.push(`hi han caigut <b>${Math.round(recent.sum)} mm</b> els últims 3 mesos, `
+        + `un <b>${Math.round(r90*100)}%</b> del que és normal aquí`);
+    }
+  }
+  if(r90==null) score += 14;   // sense dada de sequera, valor neutre
+
+  // 2) Pluja prevista (0-25)
+  const rs=next.map(r=>r.ratio).filter(v=>v!=null);
+  if(rs.length){
+    const rp=rs.reduce((a,b)=>a+b,0)/rs.length;
+    score += Math.max(0, Math.min(1, (1-rp)/0.6)) * 25;
+    parts.push(`la tendència dona un <b>${Math.round(rp*100)}%</b> de la pluja normal els pròxims mesos`);
+  } else score += 10;
+
+  // 3) Calor prevista (0-20)
+  const as=next.map(r=>r.tSd ? r.anom/r.tSd : null).filter(v=>v!=null);
+  if(as.length){
+    const ap=as.reduce((a,b)=>a+b,0)/as.length;
+    score += Math.max(0, Math.min(1, ap/2)) * 20;
+  } else score += 8;
+
+  // 4) Perillositat climàtica del tram de l'any en aquest lloc (0-20):
+  //    un fons de vall al Pirineu al gener no pot sortir "extrem" ni amb sequera.
+  const tn=next.map(r=>r.tNorm).filter(v=>v!=null);
+  const tAvg=tn.length ? tn.reduce((a,b)=>a+b,0)/tn.length : null;
+  if(tAvg!=null){
+    score += tAvg>=28 ? 20 : tAvg>=24 ? 15 : tAvg>=20 ? 9 : tAvg>=15 ? 4 : 0;
+    parts.push(`amb màximes normals de <b>${Math.round(tAvg)}°C</b> en aquest tram de l'any`);
+  }
+  score=Math.max(0, Math.min(100, score));
+  const lvl=FIRE_LVL.find(l=>score<l.max) || FIRE_LVL[FIRE_LVL.length-1];
+  const per=next.map(r=>MONTHS_LONG[r.m]).join(', ');
+  return { score:Math.round(score), lvl, why:parts.join('; '), per, r90 };
+}
+
+/* ── Risc de crescuda de riu (GloFAS) ────────────────────────────────────────── */
+/* GloFAS és una graella de 0,05°: el punt exacte del poble sovint no és cap riu i
+   torna cabal 0. Explorem 5×5 caselles i ens quedem amb el curs principal. */
+async function findRiverCell(loc){
+  const ck=`eltemps_rivercell_${loc.lat.toFixed(2)},${loc.lon.toFixed(2)}`;
+  const c=cacheGet(ck, OUT_TTL.river); if(c!==null) return c.lat!=null?c:null;
+  const las=[], los=[], STEP=0.05;
+  for(let i=-2;i<=2;i++) for(let j=-2;j<=2;j++){
+    las.push((loc.lat+i*STEP).toFixed(4)); los.push((loc.lon+j*STEP).toFixed(4));
+  }
+  const j=await outFetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${las.join(',')}&longitude=${los.join(',')}`
+    + `&daily=river_discharge&forecast_days=7`, 20000);
+  let best=null;
+  for(const o of (Array.isArray(j)?j:[j])){
+    const q=(o.daily?.river_discharge||[]).filter(v=>v!=null);
+    if(!q.length) continue;
+    const mean=q.reduce((a,b)=>a+b,0)/q.length;
+    if(!best || mean>best.q) best={ lat:o.latitude, lon:o.longitude, q:Math.round(mean*100)/100 };
+  }
+  if(!best || best.q<1){ cacheSet(ck,{}); return null; }   // cap curs d'aigua rellevant a prop
+  cacheSet(ck, best); return best;
+}
+/* Llindars de crescuda a partir de 31 anys de cabal: percentils del dia a dia i
+   períodes de retorn (Weibull sobre els màxims anuals). */
+function returnLevel(annualMax, T){
+  const a=[...annualMax].sort((x,y)=>y-x), n=a.length;
+  if(n<10) return null;
+  const r=(n+1)/T;
+  if(r<=1) return a[0];
+  if(r>=n) return a[n-1];
+  const i=Math.floor(r)-1, f=r-Math.floor(r);
+  return a[i] + (a[i+1]-a[i])*f;
+}
+async function fetchRiverBaseline(cell){
+  const ck=`eltemps_riverbase_${cell.lat.toFixed(2)},${cell.lon.toFixed(2)}`;
+  const c=cacheGet(ck, OUT_TTL.river); if(c) return c;
+  const j=await outFetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${cell.lat}&longitude=${cell.lon}`
+    + `&daily=river_discharge&start_date=${RIV_Y0}-01-01&end_date=${RIV_Y1}-12-31`, 28000);
+  const t=j.daily.time, q=j.daily.river_discharge;
+  const vals=q.filter(v=>v!=null);
+  if(vals.length<3000) throw new Error('històric de cabal insuficient');
+  const srt=[...vals].sort((a,b)=>a-b);
+  const pct=p=>srt[Math.min(srt.length-1, Math.floor(p/100*(srt.length-1)))];
+  const yrMax=new Map(), mSum=new Array(12).fill(0), mN=new Array(12).fill(0);
+  t.forEach((iso,i)=>{
+    const v=q[i]; if(v==null) return;
+    const y=iso.slice(0,4), m=+iso.slice(5,7)-1;
+    yrMax.set(y, Math.max(yrMax.get(y)??-Infinity, v));
+    mSum[m]+=v; mN[m]++;
+  });
+  const am=[...yrMax.values()];
+  const rd=v=>v==null?null:Math.round(v*1000)/1000;
+  const v={ p50:rd(pct(50)), p90:rd(pct(90)), p95:rd(pct(95)), p99:rd(pct(99)),
+            q2:rd(returnLevel(am,2)), q5:rd(returnLevel(am,5)), q10:rd(returnLevel(am,10)),
+            monMean:mSum.map((s,m)=>mN[m]?rd(s/mN[m]):null), years:am.length };
+  cacheSet(ck, v); return v;
+}
+async function fetchRiverForecast(cell){
+  const ck=`eltemps_riverfc_${cell.lat.toFixed(2)},${cell.lon.toFixed(2)}`;
+  const c=cacheGet(ck, OUT_TTL.seas); if(c) return c;
+  const j=await outFetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${cell.lat}&longitude=${cell.lon}`
+    + `&daily=river_discharge_mean,river_discharge_max,river_discharge_p75&forecast_days=${SEAS_DAYS}&ensemble=true`, 22000);
+  const d=j.daily, by=new Map();
+  d.time.forEach((iso,i)=>{
+    const k=iso.slice(0,7); let o=by.get(k);
+    if(!o){ o={ y:+iso.slice(0,4), m:+iso.slice(5,7)-1, n:0, sum:0, max:0, p75:0 }; by.set(k,o); }
+    const mn=d.river_discharge_mean?.[i], mx=d.river_discharge_max?.[i], p7=d.river_discharge_p75?.[i];
+    if(mn!=null){ o.sum+=mn; o.n++; }
+    if(mx!=null) o.max=Math.max(o.max,mx);
+    if(p7!=null) o.p75=Math.max(o.p75,p7);
+  });
+  const v=[...by.values()].filter(o=>o.n>=10)
+    .map(o=>({ y:o.y, m:o.m, mean:Math.round(o.sum/o.n*100)/100,
+               max:Math.round(o.max*100)/100, p75:Math.round(o.p75*100)/100 }));
+  cacheSet(ck, v); return v;
+}
+async function loadRiver(loc){
+  const cell=await findRiverCell(loc);
+  if(!cell) return null;
+  const [base, fc]=await Promise.all([fetchRiverBaseline(cell), fetchRiverForecast(cell)]);
+  return { cell, base, fc, km:kmBetween(loc.lat, loc.lon, cell.lat, cell.lon) };
+}
+/* El nivell es decideix amb el percentil 75 de l'ensemble, NO amb el membre més extrem:
+   a mesos vista, entre 50 simulacions sempre n'hi ha alguna que dispara el cabal, i fer-li
+   cas voldria dir cridar "molt alt" a tot arreu i sempre. El membre extrem es menciona a
+   part com a escenari possible però poc probable. */
+function floodRisk(riv){
+  if(!riv || !riv.fc.length) return null;
+  const b=riv.base;
+  let worst=riv.fc[0], top=riv.fc[0];
+  for(const o of riv.fc){
+    if(o.p75>worst.p75) worst=o;
+    if(o.max>top.max) top=o;
+  }
+  const q=worst.p75;
+  let lvl, ic, col, ret;
+  if(b.q10!=null && q>=b.q10){ lvl='Molt alt'; ic='🔴'; col='var(--bad)';  ret='és el cabal d\'una crescuda de les que passen un any de cada deu'; }
+  else if(b.q5!=null && q>=b.q5){ lvl='Alt'; ic='🟠'; col='var(--warm)'; ret='és el cabal d\'una crescuda com les que passen un any de cada cinc'; }
+  else if(b.q2!=null && q>=b.q2){ lvl='Moderat'; ic='🟡'; col='var(--warn)'; ret='és el cabal d\'una crescuda ordinària, de les que passen gairebé cada any'; }
+  else if(b.p95!=null && q>=b.p95){ lvl='Baix'; ic='🟢'; col='var(--good)'; ret='són cabals alts, però dins del que és habitual en aquest riu'; }
+  else { lvl='Baix'; ic='🟢'; col='var(--good)'; ret='són cabals normals, cap senyal de crescuda'; }
+  // El membre extrem només s'esmenta si de debò passaria d'un llindar de crescuda
+  const extreme = (b.q2!=null && top.max>=b.q2 && top.max>q*1.5)
+    ? { q:top.max, m:top.m, big:(b.q10!=null && top.max>=b.q10) } : null;
+  return { lvl, ic, col, ret, worst, q, extreme };
+}
+
+/* ── El Niño / La Niña (índex ONI del CPC, via proxy Cloudflare) ──────────────── */
+async function fetchEnso(){
+  const c=cacheGet('eltemps_enso', OUT_TTL.enso); if(c) return c;
+  const r=await fetch(proxyUrl('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt'),{signal:AbortSignal.timeout(15000)});
+  if(!r.ok) throw new Error('oni');
+  const rows=(await r.text()).trim().split(/\r?\n/)
+    .map(l=>l.trim().split(/\s+/))
+    .filter(p=>p.length>=4 && ONI_SEAS[p[0]] && /^\d{4}$/.test(p[1]))
+    .map(p=>({ seas:p[0], y:+p[1], anom:+p[3] }))
+    .filter(o=>Number.isFinite(o.anom));
+  if(rows.length<6) throw new Error('oni buit');
+  const v=rows.slice(-12);
+  cacheSet('eltemps_enso', v); return v;
+}
+function ensoState(rows){
+  const last=rows[rows.length-1], a=last.anom, abs=Math.abs(a);
+  let lbl, ic;
+  if(abs<0.5){ lbl='Neutral'; ic='⚪'; }
+  else {
+    const f = abs>=2 ? 'molt fort' : abs>=1.5 ? 'fort' : abs>=1 ? 'moderat' : 'feble';
+    if(a>0){ lbl=`El Niño ${f}`; ic='🔴'; } else { lbl=`La Niña ${f}`; ic='🔵'; }
+  }
+  const prev=rows[Math.max(0, rows.length-4)];
+  const dif=a-prev.anom;
+  const trend = dif>=0.25 ? 'pujant' : dif<=-0.25 ? 'baixant' : 'estable';
+  const [m0,m1]=ONI_SEAS[last.seas];
+  return { a, lbl, ic, trend, when:`${MONTHS[m0]}–${MONTHS[m1]} ${last.y}`, rows };
+}
+
+/* ── Càrrega i pintat de la targeta ──────────────────────────────────────────── */
+function renderOutlook(){
+  return `<div class="card" id="outlookCard">
+    <h2><span class="ic">🔮</span> Mesos vinents <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· tendència estacional</span></h2>
+    <div class="out-warn"><span style="font-size:1.05rem">⚠️</span><div><strong>Això és una tendència, no una predicció.</strong>
+      Passades dues setmanes cap model encerta el temps d'un dia concret; només es pot dir si un mes
+      <em>tendeix</em> a ser més càlid, més fred, més sec o més plujós del normal. La fiabilitat és baixa
+      i encara baixa més com més lluny va.</div></div>
+    <div id="outlookBody"><div class="out-skel">Desplaça fins aquí per carregar la tendència…</div></div>
+  </div>`;
+}
+let outlookObserver=null, outlookBusy=false;
+function scheduleOutlook(loc){
+  if(outlookObserver){ outlookObserver.disconnect(); outlookObserver=null; }
+  outlookBusy=false;
+  const el=$('outlookBody'); if(!el) return;
+  const gen=loadGen;
+  if(!('IntersectionObserver' in window)){ loadOutlook(loc, gen); return; }
+  outlookObserver=new IntersectionObserver((entries,obs)=>{
+    if(entries.some(e=>e.isIntersecting)){
+      obs.disconnect(); outlookObserver=null;
+      loadOutlook(loc, gen);
+    }
+  },{ rootMargin:'250px' });
+  outlookObserver.observe(el);
+}
+async function loadOutlook(loc, gen){
+  if(outlookBusy) return; outlookBusy=true;
+  const body=$('outlookBody'); if(!body) return;
+  body.innerHTML='<div class="out-skel"><span class="spinner"></span>Carregant la tendència dels pròxims mesos…</div>';
+  // El riu i l'ENSO són independents del lloc de graella i poden anar en paral·lel;
+  // la normal climàtica i la pluja recent s'han d'agafar al MATEIX punt que la tendència
+  // estacional, si no l'anomalia barrejaria dos llocs diferents.
+  const [seasR, ensoR, rivR] = await Promise.allSettled([ fetchSeasonal(loc), fetchEnso(), loadRiver(loc) ]);
+  const seas = seasR.status==='fulfilled' ? seasR.value : null;
+  let nor=null, recent=null, shifted=false;
+  if(seas){
+    try{ nor=await fetchNormals(seas.lat, seas.lon); }
+    catch{ try{ nor=await fetchNormals(loc.lat, loc.lon); shifted=true; }catch{} }
+    if(nor){
+      const rl = shifted ? loc : seas;
+      try{ recent=await fetchRecentPrecip(rl.lat, rl.lon); }catch{}
+    }
+  }
+  if(gen!==loadGen) return;
+  fillOutlook(loc, seas, nor, recent, shifted,
+    ensoR.status==='fulfilled' ? ensoR.value : null,
+    // null = no hi ha riu a prop (és una resposta vàlida); undefined = la crida ha fallat
+    rivR.status==='fulfilled' ? rivR.value : undefined);
+}
+function fillOutlook(loc, seas, nor, recent, shifted, enso, riv){
+  const body=$('outlookBody'); if(!body) return;
+  const out=[];
+  const rows = (seas && nor) ? outlookRows(seas, nor) : [];
+
+  /* 1) Tendència mes a mes */
+  if(rows.length){
+    const trs=rows.map(r=>{
+      const [tc,tcol]=tempCat(r.anom, r.tSd);
+      const half=Math.min(50, Math.abs(r.anom)/4*50);
+      const tl=r.anom>=0 ? 50 : 50-half;
+      const [pc,pcol]=precipCat(r.ratio);
+      const pp=r.ratio!=null ? Math.min(100, r.ratio*50) : null;
+      const pl=pp!=null?Math.min(pp,50):0, pr=pp!=null?Math.max(pp,50):0;
+      const sign=r.anom>=0?'+':'−';
+      return `<div class="out-month">
+        <div class="omn">${MONTHS[r.m]}<small>${r.y}${r.partial?` · ${r.days} d`:''}</small></div>
+        <div class="out-bar" title="Màxima prevista ${r1(r.tNorm+r.anom)}°C · normal ${NORM_Y0}-${NORM_Y1}: ${r1(r.tNorm)}°C · ${r.warmN} de ${r.nMem} membres per damunt de la normal">
+          <span class="fill" style="left:${tl}%;width:${half}%;background:${tcol}"></span><span class="mid"></span>
+          <span class="txt">${tc}<br>${sign}${r1(Math.abs(r.anom))}°</span>
+        </div>
+        ${r.ratio!=null ? `<div class="out-bar" title="Pluja prevista ${Math.round(r.pFc)} mm · normal ${NORM_Y0}-${NORM_Y1}: ${Math.round(r.pNorm)} mm${r.dryN!=null?` · ${r.dryN} de ${r.nMem} membres per sota de la normal`:''}">
+          <span class="fill" style="left:${pl}%;width:${pr-pl}%;background:${pcol}"></span><span class="mid"></span>
+          <span class="txt">${pc}<br>${Math.round(r.ratio*100)}%</span>
+        </div>` : `<div class="out-bar"><span class="txt">—</span></div>`}
+      </div>`;
+    }).join('');
+    const n3=rows.slice(0,3);
+    const aAvg=n3.reduce((a,r)=>a+r.anom,0)/n3.length;
+    const rs=n3.map(r=>r.ratio).filter(v=>v!=null);
+    const rAvg=rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null;
+    const frase = `Els pròxims mesos (${n3.map(r=>MONTHS_LONG[r.m]).join(', ')}) apunten a `
+      + `<strong>${aAvg>=0.5?'temperatures per damunt del normal':aAvg<=-0.5?'temperatures per sota del normal':'temperatures dins del normal'}</strong>`
+      + (rAvg!=null ? ` i <strong>${rAvg<0.8?'pluja per sota del normal':rAvg>1.25?'pluja per damunt del normal':'pluja dins del normal'}</strong>` : '')
+      + '.';
+    out.push(`<div class="out-sub">📈 Tendència mes a mes</div>
+      <div class="out-head"><div>Mes</div><div>Temperatura</div><div>Pluja</div></div>
+      ${trs}
+      <div class="spread-note">${frase} Comparat amb la mitjana <strong>${NORM_Y0}-${NORM_Y1}</strong>
+      del mateix lloc. El model és un <strong>ensemble de ${rows[0].nMem} simulacions</strong>: passa el dit
+      (o el ratolí) per damunt de cada barra per veure els valors i quantes simulacions hi estan d'acord.</div>`);
+  }
+
+  /* 2) Risc d'incendi */
+  const fire = rows.length ? fireRisk(rows, recent, nor) : null;
+  if(fire){
+    out.push(`<div class="out-sub">🔥 Risc d'incendi forestal</div>
+      <div class="out-risk">
+        <div class="ric">${fire.lvl.ic}</div>
+        <div class="rtxt">
+          <div class="rlvl" style="color:${fire.lvl.col}">${fire.lvl.lbl} <span style="font-size:.72rem;font-weight:600;color:var(--text-secondary)">· índex ${fire.score}/100 · ${fire.per}</span></div>
+          <div class="rdesc">Per què: ${fire.why}.</div>
+        </div>
+      </div>
+      <div class="spread-note">⚠️ <strong>Índex orientatiu calculat per aquesta app</strong>, no és cap nivell oficial:
+      combina la sequera acumulada, la pluja i la calor previstes i la perillositat climàtica d'aquest tram de l'any.
+      El nivell oficial a Catalunya és el <strong>Pla ALFA</strong> de Bombers i Agents Rurals, i durant la campanya
+      forestal manen les seves indicacions i les de Protecció Civil.</div>`);
+  }
+
+  /* 3) Risc de crescuda */
+  const fl = floodRisk(riv);
+  if(fl){
+    const b=riv.base;
+    const th=[ b.q2!=null?`crescuda ordinària a partir de <b>${r1(b.q2)} m³/s</b>`:null,
+               b.q10!=null?`crescuda gran (1 any de cada 10) a partir de <b>${r1(b.q10)} m³/s</b>`:null ]
+             .filter(Boolean).join(' · ');
+    out.push(`<div class="out-sub">🌊 Risc de crescuda de riu</div>
+      <div class="out-risk">
+        <div class="ric">${fl.ic}</div>
+        <div class="rtxt">
+          <div class="rlvl" style="color:${fl.col}">${fl.lvl} <span style="font-size:.72rem;font-weight:600;color:var(--text-secondary)">· mes amb més cabal: ${MONTHS_LONG[fl.worst.m]}</span></div>
+          <div class="rdesc">Al curs d'aigua més important a prop (a <b>${r1(riv.km)} km</b>${b.p50!=null?`, cabal habitual <b>${r1(b.p50)} m³/s</b>`:''}),
+            en els escenaris més probables el cabal no hauria de passar de <b>${r1(fl.q)} m³/s</b>
+            en els pròxims ${Math.round(SEAS_DAYS/30)} mesos: ${fl.ret}.
+            ${fl.extreme?`<br>Una simulació aïllada de l'ensemble arriba a ${r1(fl.extreme.q)} m³/s ${elMes(fl.extreme.m)}
+              —${fl.extreme.big?'nivell de crescuda gran':'nivell de crescuda'}—, però és un escenari extrem i poc probable.`:''}
+            ${th?`<br>Llindars calculats amb ${b.years} anys d'històric: ${th}.`:''}</div>
+        </div>
+      </div>
+      <div class="spread-note">⚠️ GloFAS és un model global de caselles de 5 km: va bé per als rius grans,
+      però <strong>no veu les revingudes sobtades de rieres i torrents</strong>, que són justament les més
+      perilloses aquí. Per a inundacions, el que val és l'avís de Protecció Civil (INUNCAT) i l'ACA.</div>`);
+  } else if(riv===null && rows.length){
+    out.push(`<div class="out-sub">🌊 Risc de crescuda de riu</div>
+      <div class="spread-note">No hi ha cap curs d'aigua prou gran a prop d'aquest punt per fer-ne seguiment
+      amb el model global de rius (GloFAS).</div>`);
+  }
+
+  /* 4) El Niño / La Niña */
+  if(enso){
+    const e=ensoState(enso);
+    const bars=e.rows.map(o=>{
+      const h=Math.max(3, Math.min(26, Math.abs(o.anom)/2.5*26));
+      const col=o.anom>=0.5?'var(--bad)':o.anom<=-0.5?'var(--cold)':'var(--text-secondary)';
+      return `<span title="${o.seas} ${o.y}: ${o.anom>0?'+':''}${o.anom.toFixed(2)}" style="height:${h}px;background:${col};opacity:.75"></span>`;
+    }).join('');
+    // A la Mediterrània l'ENSO amb prou feines es nota; als tròpics del Pacífic i a Amèrica, molt.
+    const eur = loc.lat>32 && loc.lat<55 && loc.lon>-12 && loc.lon<42;
+    const nota = eur
+      ? `A Catalunya i a la Mediterrània occidental <strong>l'efecte d'El Niño és feble i poc constant</strong>:
+         aquí el temps el manen més la NAO (l'anticicló de les Açores) i la temperatura del Mediterrani.
+         Ho posem com a context global, no com a predicció d'aquí.`
+      : `L'efecte d'El Niño és fort al Pacífic tropical, a Austràlia, al sud-est asiàtic i a bona part
+         d'Amèrica; en altres zones és molt més feble i irregular.`;
+    out.push(`<div class="out-sub">🌏 El Niño / La Niña</div>
+      <div class="out-enso">
+        <div class="oni">${e.ic} ${e.lbl}
+          <span style="font-size:.74rem;font-weight:600;color:var(--text-secondary)">· índex ONI ${e.a>0?'+':''}${e.a.toFixed(2)} · ${e.when} · ${e.trend}</span></div>
+        <div class="out-spark">${bars}</div>
+        <div class="odesc">${nota}</div>
+      </div>`);
+  }
+
+  if(!out.length){
+    body.innerHTML=`<div class="out-skel">No s'han pogut carregar les dades de tendència
+      (${offlineMode?'estàs sense connexió':'les fonts no responen'}). Torna-ho a provar més tard.</div>`;
+    return;
+  }
+  const src=[];
+  if(rows.length) src.push(`tendència <a href="https://open-meteo.com/en/docs/seasonal-forecast-api" target="_blank" rel="noopener">CFSv2 (NOAA)</a>`);
+  if(nor) src.push(`normal climàtica ERA5 ${NORM_Y0}-${NORM_Y1}`);
+  if(fl) src.push(`cabal de rius GloFAS`);
+  if(enso) src.push(`índex ONI del <a href="https://www.cpc.ncep.noaa.gov" target="_blank" rel="noopener">CPC/NOAA</a>`);
+  const dist = (seas && !shifted) ? kmBetween(loc.lat, loc.lon, seas.lat, seas.lon) : null;
+  body.innerHTML = out.join('') + `<div class="card-note">Fonts: ${src.join(' · ')}.
+    ${dist!=null && dist>=3 ? `El model estacional treballa amb caselles grans: les dades de tendència són del punt de graella més proper, a ${Math.round(dist)} km d'aquí. ` : ''}
+    Les anomalies es calculen contra la normal del mateix punt, sense corregir el biaix propi del model.
+    Recorda que la fiabilitat a mesos vista és baixa: serveix per fer-se una idea, no per fer plans.</div>`;
 }
 
 /* ── Qualitat de l'aire ──────────────────────────────────────────────────────── */
