@@ -269,9 +269,15 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .out-sub { font-size:.7rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin:1.35rem 0 .65rem; display:flex; align-items:center; gap:.4rem; }
 .out-sub:first-child { margin-top:0; }
 .out-head { display:grid; grid-template-columns:4.6rem 1fr 1fr; gap:.5rem; font-size:.63rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; padding-bottom:.3rem; }
-.out-month { display:grid; grid-template-columns:4.6rem 1fr 1fr; gap:.5rem; align-items:center; padding:.4rem 0; border-top:1px solid var(--border); }
-.out-month .omn { font-weight:700; font-size:.82rem; }
+.out-month { display:grid; grid-template-columns:4.6rem 1fr 1fr; gap:.5rem; align-items:center; padding:.4rem 0; border-top:1px solid var(--border); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.out-month:hover .omn, .out-month:focus-visible .omn { color:var(--accent); }
+.out-month .omn { font-weight:700; font-size:.82rem; position:relative; transition:color .15s; }
 .out-month .omn small { display:block; font-weight:400; font-size:.6rem; color:var(--text-secondary); }
+.out-month .chev { position:absolute; right:.25rem; top:.05rem; font-size:.7rem; color:var(--text-secondary); transition:transform .2s; }
+.out-month[aria-expanded="true"] .chev { transform:rotate(180deg); }
+.out-det { display:none; font-size:.72rem; color:var(--text-secondary); line-height:1.6; padding:.15rem .25rem .65rem; }
+.out-det.show { display:block; animation:fadeSlide .2s ease-out; }
+.out-det b { color:var(--text-primary); font-weight:700; }
 .out-bar { position:relative; height:36px; border-radius:8px; background:var(--bg-card); border:1px solid var(--border); overflow:hidden; }
 .out-bar .fill { position:absolute; top:0; bottom:0; opacity:.42; }
 .out-bar .mid { position:absolute; top:0; bottom:0; left:50%; width:1px; background:var(--text-secondary); opacity:.45; }
@@ -418,7 +424,7 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 const BUILD_DATE  = '2026-07-30';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1949,6 +1955,14 @@ function ensoState(rows){
   return { a, lbl, ic, trend, when:`${MONTHS[m0]}–${MONTHS[m1]} ${last.y}`, rows };
 }
 
+/* Desplega el detall d'un mes. Al mòbil és l'única manera de veure'l: no hi ha `hover`. */
+function toggleOutlookMonth(i){
+  const d=$('outDet'+i), row=$('outMon'+i);
+  if(!d) return;
+  const open=d.classList.toggle('show');
+  if(row) row.setAttribute('aria-expanded', open?'true':'false');
+}
+
 /* ── Càrrega i pintat de la targeta ──────────────────────────────────────────── */
 function renderOutlook(){
   return `<div class="card" id="outlookCard">
@@ -2006,7 +2020,7 @@ function fillOutlook(loc, seas, nor, recent, shifted, enso, riv){
 
   /* 1) Tendència mes a mes */
   if(rows.length){
-    const trs=rows.map(r=>{
+    const trs=rows.map((r,i)=>{
       const [tc,tcol]=tempCat(r.anom, r.tSd);
       const half=Math.min(50, Math.abs(r.anom)/4*50);
       const tl=r.anom>=0 ? 50 : 50-half;
@@ -2014,17 +2028,26 @@ function fillOutlook(loc, seas, nor, recent, shifted, enso, riv){
       const pp=r.ratio!=null ? Math.min(100, r.ratio*50) : null;
       const pl=pp!=null?Math.min(pp,50):0, pr=pp!=null?Math.max(pp,50):0;
       const sign=r.anom>=0?'+':'−';
-      return `<div class="out-month">
-        <div class="omn">${MONTHS[r.m]}<small>${r.y}${r.partial?` · ${r.days} d`:''}</small></div>
-        <div class="out-bar" title="Màxima prevista ${r1(r.tNorm+r.anom)}°C · normal ${NORM_Y0}-${NORM_Y1}: ${r1(r.tNorm)}°C · ${r.warmN} de ${r.nMem} membres per damunt de la normal">
+      // El detall va en una fila desplegable, no en un `title`: al mòbil no hi ha ratolí
+      // i els tooltips no es veuen mai.
+      const det=[`<b>Temperatura:</b> màxima prevista ${r1(r.tNorm+r.anom)}°C, normal ${NORM_Y0}-${NORM_Y1} `
+        + `${r1(r.tNorm)}°C · ${r.warmN} de ${r.nMem} simulacions donen el mes més càlid del normal`];
+      if(r.ratio!=null) det.push(`<b>Pluja:</b> ${Math.round(r.pFc)} mm previstos, normal ${Math.round(r.pNorm)} mm`
+        + (r.dryN!=null?` · ${r.dryN} de ${r.nMem} simulacions el donen més sec del normal`:''));
+      if(r.partial) det.push(`<b>Atenció:</b> d'aquest mes només se n'han pogut fer servir ${r.days} dies.`);
+      return `<div class="out-month" id="outMon${i}" onclick="toggleOutlookMonth(${i})" role="button" tabindex="0" aria-expanded="false" aria-controls="outDet${i}"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleOutlookMonth(${i})}">
+        <div class="omn">${MONTHS[r.m]}<small>${r.y}${r.partial?` · ${r.days} d`:''}</small><span class="chev">▾</span></div>
+        <div class="out-bar">
           <span class="fill" style="left:${tl}%;width:${half}%;background:${tcol}"></span><span class="mid"></span>
           <span class="txt">${tc}<br>${sign}${r1(Math.abs(r.anom))}°</span>
         </div>
-        ${r.ratio!=null ? `<div class="out-bar" title="Pluja prevista ${Math.round(r.pFc)} mm · normal ${NORM_Y0}-${NORM_Y1}: ${Math.round(r.pNorm)} mm${r.dryN!=null?` · ${r.dryN} de ${r.nMem} membres per sota de la normal`:''}">
+        ${r.ratio!=null ? `<div class="out-bar">
           <span class="fill" style="left:${pl}%;width:${pr-pl}%;background:${pcol}"></span><span class="mid"></span>
           <span class="txt">${pc}<br>${Math.round(r.ratio*100)}%</span>
         </div>` : `<div class="out-bar"><span class="txt">—</span></div>`}
-      </div>`;
+      </div>
+      <div class="out-det" id="outDet${i}">${det.map(d=>`<div>${d}</div>`).join('')}</div>`;
     }).join('');
     const n3=rows.slice(0,3);
     const aAvg=n3.reduce((a,r)=>a+r.anom,0)/n3.length;
@@ -2038,8 +2061,8 @@ function fillOutlook(loc, seas, nor, recent, shifted, enso, riv){
       <div class="out-head"><div>Mes</div><div>Temperatura</div><div>Pluja</div></div>
       ${trs}
       <div class="spread-note">${frase} Comparat amb la mitjana <strong>${NORM_Y0}-${NORM_Y1}</strong>
-      del mateix lloc. El model és un <strong>ensemble de ${rows[0].nMem} simulacions</strong>: passa el dit
-      (o el ratolí) per damunt de cada barra per veure els valors i quantes simulacions hi estan d'acord.</div>`);
+      del mateix lloc. El model és un <strong>ensemble de ${rows[0].nMem} simulacions</strong>:
+      <strong>toca cada mes</strong> per veure'n els valors i quantes simulacions hi estan d'acord.</div>`);
   }
 
   /* 2) Risc d'incendi */
