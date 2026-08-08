@@ -2469,7 +2469,7 @@ function renderSpecial(fc){
   const evts=todaysEvents();
   if(!bdays.length && !evts.length) return '';
   const bdayHtml=bdays.length
-    ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Molts anys! 🎉</span>`
+    ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Per molts anys!! 🎉</span>`
     : '';
   const evtHtml=evts.map(e=>`<span class="fun-event">${esc(e.msg)}</span>`).join('');
   return `<div class="fun-special" id="specialBanner">${evtHtml}${bdayHtml}</div>`;
