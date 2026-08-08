@@ -1203,9 +1203,12 @@ function renderSummary(loc, fc, models, air){
   let start = h.time.findIndex(t => t.slice(0,13) === nowIso); if(start<0) start=0;
   const todayDate = c.time.slice(0,10);
   const rainHours=[];
+  let maxProbRest=0;
   for(let i=start;i<h.time.length;i++){
     if(h.time[i].slice(0,10) !== todayDate) break;        // només la resta d'avui
-    if((h.precipitation_probability[i]??0) >= 40) rainHours.push(i);
+    const p = h.precipitation_probability[i]??0;
+    maxProbRest = Math.max(maxProbRest, p);
+    if(p >= 40) rainHours.push(i);
   }
   if(c.precipitation > 0) txt += ` <strong>Ara mateix plou.</strong>`;
   if(rainHours.length){
@@ -1216,6 +1219,8 @@ function renderSummary(loc, fc, models, air){
   } else if(c.precipitation <= 0){
     if(nowcastRainSignal(fc)){
       txt += ` Possible precipitació a les <strong>properes 2 h</strong>; la resta del dia sense pluja destacada prevista.`;
+    } else if(maxProbRest >= 15){
+      txt += ` Hi ha una <strong>petita possibilitat de pluja</strong> (fins al ${maxProbRest}%) al llarg del dia, tot i que no es preveu res destacable.`;
     } else {
       txt += ` No s'espera pluja a la resta del dia.`;
     }
