@@ -138,6 +138,18 @@ Coses que es poden incorporar més endavant:
 
 ---
 
+## 🔒 Seguretat (llegeix-ho abans d'editar `index.html`)
+
+- Hi ha una **Content-Security-Policy** a la capçalera de `index.html`. Limita a quins servidors
+  es pot connectar l'app. **Si algun dia afegeixes una API nova, has d'afegir el seu domini al
+  `connect-src`** (i si és una imatge, a l'`img-src`), o el navegador la bloquejarà en silenci.
+  Per la mateixa raó no es poden carregar llibreries des d'un CDN: s'han de posar a `vendor/`.
+- **Tot el text que ve de fora** (nom de la població, resposta d'una API, avisos de Meteoalarm,
+  paràmetres de la URL) ha de passar per **`esc()`** abans d'inserir-lo amb `innerHTML`.
+  Sense això, un nom de lloc amb codi HTML s'executaria al navegador.
+- Les **coordenades del GPS** s'arrodoneixen amb `coarse()` (~100 m) abans d'enviar-les a la
+  geocodificació inversa. No cal més precisió i així no surt la posició exacta del dispositiu.
+
 ## 📝 Notes
 
 - L'app no guarda res en cap servidor: les cerques recents i el tema es desen al navegador

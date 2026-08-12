@@ -7,7 +7,7 @@
    - Estàtics propis: cache-first amb actualització.
    - Peticions externes (APIs, tiles, Meteoalarm…): sempre a la xarxa.
    ════════════════════════════════════════════════════════════════════════════ */
-const CACHE = 'eltemps-v17';
+const CACHE = 'eltemps-v18';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png',
                './vendor/leaflet.js', './vendor/leaflet.css'];
 
@@ -27,6 +27,12 @@ self.addEventListener('activate', e => {
     await self.clients.claim();
   })());
 });
+
+// Només val la pena desar respostes correctes i del nostre propi origen.
+// (type 'basic' = mateixa procedència; descarta opaques i redireccions a fora.)
+function cacheable(r) {
+  return !!r && r.ok && r.type === 'basic';
+}
 
 // fetch amb temps d'espera (evita quedar penjat si la xarxa no respon)
 function fetchTimeout(req, ms) {
@@ -48,7 +54,12 @@ self.addEventListener('fetch', e => {
     e.respondWith((async () => {
       try {
         const net = await fetchTimeout(req, 6000);
-        const c = await caches.open(CACHE); c.put('./index.html', net.clone()); c.put('./', net.clone());
+        // Només es desa una resposta bona i del nostre origen. Sense aquesta comprovació,
+        // una pàgina d'error (404/500) o la pantalla d'un portal captiu (wifi d'hotel)
+        // es quedaria desada com a carcassa de l'app i es serviria offline.
+        if (cacheable(net)) {
+          const c = await caches.open(CACHE); c.put('./index.html', net.clone()); c.put('./', net.clone());
+        }
         return net;
       } catch {
         const cached = await caches.match('./index.html') || await caches.match('./') || await caches.match(req);
@@ -65,7 +76,8 @@ self.addEventListener('fetch', e => {
   // Estàtics propis: cache-first amb actualització en segon pla
   e.respondWith(
     caches.match(req).then(m => m || fetchTimeout(req, 8000).then(r => {
-      const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r;
+      if (cacheable(r)) { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); }
+      return r;
     }).catch(() => m))
   );
 });

@@ -9,6 +9,22 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#38bdf8">
+<!-- Política de seguretat de contingut: limita a on pot connectar i què pot carregar l'app.
+     Com que tota la interactivitat va amb atributs onclick, cal 'unsafe-inline' als scripts;
+     el valor real és el connect-src (cap altre servidor pot rebre dades) i object/base/form-src. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: https://*.tile.openstreetmap.org https://*.rainviewer.com;
+  connect-src 'self' https://*.open-meteo.com https://api.rainviewer.com https://mecai.oscarbellosido.workers.dev;
+  font-src 'self';
+  manifest-src 'self';
+  worker-src 'self';
+  object-src 'none';
+  base-uri 'self';
+  form-action 'none';
+  frame-src 'none'">
 <!-- Leaflet (radar): allotjat al repo i carregat de manera tardana (vegeu loadLeaflet) -->
 <style>
 /* ── Variables ──────────────────────────────────────────────────────────────── */
@@ -467,7 +483,7 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const BUILD_DATE  = '2026-08-12';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -719,7 +735,13 @@ const MONTHS_FULL = ['gener','febrer','març','abril','maig','juny','juliol','ag
 
 /* ── Helpers ─────────────────────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
-function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* Escapa per a HTML. També la cometa simple: avui cap interpolació va dins d'un atribut
+   amb cometes simples, però si algun dia se n'escriu una, esc() ja la cobreix. */
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+/* Retalla coordenades a ~100 m abans d'enviar-les a serveis externs. La geocodificació
+   inversa treballa amb zoom 8-10 (comarca/província), així que el resultat no canvia,
+   però no surt del dispositiu la posició exacta de l'usuari. */
+function coarse(n){ return Math.round(Number(n)*1000)/1000; }
 function r1(n){ return Math.round(n*10)/10; }
 function compass(deg){
   const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
@@ -904,7 +926,7 @@ function useMyLocation(){
       const lat=pos.coords.latitude, lon=pos.coords.longitude;
       const loc={ name:'La meva ubicació', region:'', lat, lon };
       try{
-        const r=await fetch(proxyUrl(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=10&accept-language=ca`),{signal:AbortSignal.timeout(8000)});
+        const r=await fetch(proxyUrl(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coarse(lat)}&lon=${coarse(lon)}&zoom=10&accept-language=ca`),{signal:AbortSignal.timeout(8000)});
         if(r.ok){ const j=await r.json(); const a=j.address||{};
           loc.name = a.city||a.town||a.village||a.municipality||j.name||loc.name;
           loc.cc = (a.country_code||'').toUpperCase();
@@ -1018,7 +1040,7 @@ async function fetchOneGeo(name, lat, lon, lang='ca'){
 }
 /* Geocodificació inversa per coordenades (Nominatim via proxy) en l'idioma indicat */
 async function revGeo(lat, lon, lang='ca'){
-  const t=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=8&accept-language=${lang}`;
+  const t=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coarse(lat)}&lon=${coarse(lon)}&zoom=8&accept-language=${encodeURIComponent(lang)}`;
   const r=await fetch(proxyUrl(t),{signal:AbortSignal.timeout(9000)});
   if(!r.ok) return null; const j=await r.json(); const a=j.address||{};
   return { cc:(a.country_code||'').toUpperCase(), admin1:a.state||a.region, admin2:a.county||a.province||a.state_district, name:a.city||a.town||a.village||j.name };
@@ -2356,6 +2378,20 @@ function renderAir(air){
 
 /* ── Radar de pluja (RainViewer + Leaflet) ──────────────────────────────────── */
 let radarMap=null, radarLayers=[], radarFrames=[], radarIdx=0, radarTimer=null, radarObserver=null;
+/* La resposta de RainViewer diu a quin host i camí són les tiles. Com que amb això
+   construïm URLs, validem que el host sigui HTTPS i de rainviewer.com, i que el camí
+   sigui un camí normal. Si no ho és, no dibuixem el radar (millor sense que no pas
+   demanant imatges a un servidor desconegut). */
+function safeTileHost(h){
+  try{ const u=new URL(String(h||''));
+       return (u.protocol==='https:' && (u.hostname==='rainviewer.com' || u.hostname.endsWith('.rainviewer.com')))
+         ? u.origin : null;
+  }catch{ return null; }
+}
+function safeTilePath(p){
+  const s=String(p||'');
+  return (/^\/[A-Za-z0-9_\-./]*$/.test(s) && !s.includes('//') && !s.includes('..')) ? s : null;
+}
 
 // Leaflet allotjat al repo i carregat NOMÉS quan cal (estalvia ~160 KB a la càrrega
 // inicial; el radar queda avall i no sempre es mira). Es precacheja al service worker.
@@ -2433,12 +2469,16 @@ async function initRadar(loc){
   try{
     const r=await fetch('https://api.rainviewer.com/public/weather-maps.json',{signal:AbortSignal.timeout(10000)});
     if(!r.ok) throw new Error('rainviewer');
-    const data=await r.json(); const host=data.host;
+    const data=await r.json();
+    // El host de les tiles ve de la resposta de RainViewer: comprova que sigui HTTPS i
+    // del seu domini abans de fer-lo servir per construir URLs de tiles.
+    const host=safeTileHost(data.host);
+    if(!host) throw new Error('rainviewer host');
     const past=data.radar?.past||[], nowcast=data.radar?.nowcast||[];
     radarFrames=[
-      ...past.map(f=>({time:f.time,path:f.path,host,type:'past'})),
-      ...nowcast.map(f=>({time:f.time,path:f.path,host,type:'nowcast'}))
-    ];
+      ...past.map(f=>({time:f.time,path:safeTilePath(f.path),host,type:'past'})),
+      ...nowcast.map(f=>({time:f.time,path:safeTilePath(f.path),host,type:'nowcast'}))
+    ].filter(f=>f.path);
     if(!radarFrames.length) return;
     radarLayers=radarFrames.map(f=>
       L.tileLayer(`${f.host}${f.path}/512/{z}/{x}/{y}/6/1_1.png`,{
