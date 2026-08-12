@@ -151,7 +151,8 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 }
 /* Capa d'efectes meteorològics (sol, pluja, neu, boira, tempesta…) */
 .wx-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
-.now-hero > .now-loc, .now-hero > .now-time, .now-hero > .now-main, .now-hero > .now-stats, .now-hero > .nowcast { position:relative; z-index:1; }
+.now-hero > .now-loc, .now-hero > .now-time, .now-hero > .now-main, .now-hero > .now-stats, .now-hero > .nowcast,
+.now-hero > .heat-alert, .now-hero > .good-for { position:relative; z-index:1; }
 @media (prefers-reduced-motion: reduce){ .wx-canvas { display:none; } }
 .now-loc { display:flex; align-items:baseline; gap:.55rem; flex-wrap:wrap; margin-bottom:.15rem; }
 .now-loc .city { font-size:1.25rem; font-weight:700; }
@@ -175,6 +176,22 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .nowcast--rain .nc-title, .nowcast--wet .nc-title { color:var(--accent); }
 .nowcast--dry { border-color:rgba(74,222,128,.32); background:rgba(74,222,128,.08); }
 .nowcast--dry .nc-title { color:var(--good); }
+/* Alerta de calor extrema (properes hores) */
+.heat-alert { display:flex; align-items:flex-start; gap:.6rem; margin-top:1rem; padding:.6rem .85rem; border-radius:14px;
+  border:1px solid rgba(251,146,60,.45); background:rgba(251,146,60,.12); color:var(--warm); font-size:.84rem; line-height:1.45; }
+.heat-alert.extreme { border-color:rgba(248,113,113,.5); background:rgba(248,113,113,.12); color:var(--bad); }
+.heat-alert .ha-ic { font-size:1.45rem; line-height:1; flex-shrink:0; }
+.heat-alert strong { font-weight:800; }
+.heat-alert .ha-tip { display:block; color:var(--text-secondary); font-size:.76rem; font-weight:500; margin-top:.15rem; }
+
+/* Suggeriments contextuals "Bon moment per a…" */
+.good-for { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:1rem; }
+.gf-pill { display:inline-flex; align-items:center; gap:.35rem; font-size:.78rem; font-weight:600;
+  padding:.35rem .75rem; border-radius:20px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-primary); }
+.gf-pill.good { color:var(--good); border-color:rgba(74,222,128,.35); background:rgba(74,222,128,.09); }
+.gf-pill.rain { color:var(--accent); border-color:rgba(56,189,248,.35); background:rgba(56,189,248,.1); }
+.gf-pill.warn { color:var(--warn); border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.1); }
+
 .now-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.55rem; margin-top:1.25rem; }
 .stat { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:.7rem .85rem; transition:background-color .3s ease; }
 .stat .lbl { color:var(--text-secondary); font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.3rem; display:flex; align-items:center; gap:.3rem; }
@@ -204,6 +221,24 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .tband .tmin { color:var(--text-secondary); font-size:.85rem; min-width:2.4rem; text-align:right; }
 .tband .tmax { font-weight:700; font-size:.9rem; min-width:2.4rem; }
 .tband .bar { width:70px; height:6px; border-radius:6px; background:linear-gradient(90deg,var(--cold),var(--warm)); position:relative; }
+/* En mòbil, els 7 dies passen a targetes horitzontals amb scroll lateral */
+@media (max-width:560px){
+  .daily-list { flex-direction:row; overflow-x:auto; gap:.5rem; padding-bottom:.5rem;
+    scrollbar-width:thin; scroll-snap-type:x proximity; }
+  .daily-list::-webkit-scrollbar { height:7px; }
+  .daily-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:10px; }
+  .day-row { flex:0 0 auto; width:5.4rem; grid-template-columns:1fr; justify-items:center;
+    text-align:center; gap:.3rem; padding:.7rem .35rem; scroll-snap-align:start; }
+  .day-row .dname { font-size:.78rem; }
+  .day-row .dname small { font-size:.62rem; }
+  .day-row .dic { font-size:1.6rem; }
+  .day-row .dmid { font-size:.66rem; align-items:center; gap:.1rem; }
+  .day-row .dmid .wind { display:none; }        /* el vent no hi cap: queda a la vista d'escriptori */
+  .tband { flex-direction:column-reverse; gap:.1rem; justify-content:center; }
+  .tband .bar { display:none; }
+  .tband .tmin, .tband .tmax { min-width:0; text-align:center; }
+  .tband .tmax { font-size:1rem; }
+}
 
 /* ── Consens multi-model ────────────────────────────────────────────────────── */
 .consensus-head { display:flex; justify-content:space-between; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:.9rem; }
@@ -256,12 +291,20 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 /* ── Gràfic horari ──────────────────────────────────────────────────────────── */
 .hour-chart { width:100%; height:auto; display:block; margin-bottom:.85rem; overflow:visible; }
 .hour-chart .temp-line { fill:none; stroke:var(--warm); stroke-width:2.5; stroke-linejoin:round; stroke-linecap:round; }
+.hour-chart .temp-area { fill:url(#hcTempGrad); }
 .hour-chart .temp-dot { fill:var(--warm); }
 .hour-chart .precip-bar { fill:var(--accent); opacity:.45; }
+.hour-chart .night-band { fill:var(--text-secondary); opacity:.07; }
 .hour-chart .grid-line { stroke:var(--border); stroke-width:1; }
 .hour-chart .axis-lbl { fill:var(--text-secondary); font-size:10px; }
 .hour-chart .temp-lbl { fill:var(--text-primary); font-size:10px; font-weight:700; }
 .hour-chart .precip-lbl { fill:var(--accent); font-size:9px; font-weight:600; }
+.hour-chart .hc-stop-a { stop-color:var(--warm); stop-opacity:.28; }
+.hour-chart .hc-stop-b { stop-color:var(--warm); stop-opacity:0; }
+/* En mòbil el viewBox és més estret (12 h): apugem la tipografia perquè,
+   un cop escalat l'SVG, les etiquetes segueixin sent llegibles */
+.hour-chart.narrow .axis-lbl, .hour-chart.narrow .temp-lbl { font-size:13px; }
+.hour-chart.narrow .precip-lbl { font-size:11px; }
 
 /* ── Mesos vinents (tendència estacional) ───────────────────────────────────── */
 .out-warn { display:flex; gap:.55rem; align-items:flex-start; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.3); border-radius:12px; padding:.7rem .9rem; font-size:.75rem; color:var(--warn); line-height:1.55; margin-bottom:1.1rem; }
@@ -424,8 +467,8 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.3.1';
-const BUILD_DATE  = '2026-07-30';
+const APP_VERSION = '1.4.0';
+const BUILD_DATE  = '2026-08-12';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -926,7 +969,7 @@ async function fetchForecast(loc){
     + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,`
     + `cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m`
     + `&minutely_15=precipitation`
-    + `&hourly=temperature_2m,precipitation_probability,weather_code,is_day,freezing_level_height,snow_depth`
+    + `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,is_day,freezing_level_height,snow_depth`
     + `&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_sum,`
     + `precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,`
     + `uv_index_max,sunrise,sunset,snowfall_sum`
@@ -1307,6 +1350,85 @@ function renderNowcast(fc){
   }
 }
 
+/* ── Alerta de calor extrema ──────────────────────────────────────────────────
+   Mira les properes 24 h i avisa si la sensació tèrmica (o la temperatura)
+   superarà els 35°. Indica el pic i a quina hora arribarà. */
+function renderHeatAlert(fc){
+  const h=fc.hourly, c=fc.current;
+  if(!h?.time || !c?.time) return '';
+  const nowIso=c.time.slice(0,13);
+  let s=h.time.findIndex(t=>t.slice(0,13)===nowIso); if(s<0) s=0;
+  const end=Math.min(s+24, h.time.length);
+  let best=null;
+  for(let i=s;i<end;i++){
+    const ap=h.apparent_temperature?.[i], te=h.temperature_2m?.[i];
+    if(ap==null && te==null) continue;
+    const v=Math.max(ap??-99, te??-99);
+    if(!best || v>best.v) best={ v, i, feels:(ap!=null && (te==null || ap>=te)) };
+  }
+  if(!best || best.v<35) return '';
+  const extreme=best.v>=40;
+  const when=new Date(h.time[best.i]);
+  const hh=when.getHours().toString().padStart(2,'0')+'h';
+  const whenTxt = best.i===s ? 'ara mateix'
+    : (h.time[best.i].slice(0,10)===c.time.slice(0,10) ? `a les ${hh}` : `demà a les ${hh}`);
+  const what = best.feels ? 'la sensació tèrmica arribarà als' : 'la temperatura arribarà als';
+  const lvl  = extreme ? 'Calor perillosa' : 'Calor extrema';
+  const tip  = extreme
+    ? 'Evita sortir entre les 12h i les 17h, beu aigua sovint i vigila la gent gran i els nens.'
+    : 'Beu aigua sovint, busca l\'ombra a les hores centrals i evita l\'esforç físic al sol.';
+  return `<div class="heat-alert${extreme?' extreme':''}">
+    <span class="ha-ic">${extreme?'🥵':'⚠️'}</span>
+    <span><strong>${lvl}:</strong> ${what} <strong>${Math.round(best.v)}°</strong> ${whenTxt}.
+    <span class="ha-tip">${tip}</span></span>
+  </div>`;
+}
+
+/* ── "Bon moment per a…" ──────────────────────────────────────────────────────
+   Suggeriments contextuals a partir de vent, UV, pluja, temperatura i humitat.
+   Se'n mostren 3 com a màxim, per ordre de rellevància. */
+function renderGoodFor(fc){
+  const c=fc.current, d=fc.daily, h=fc.hourly;
+  if(!c) return '';
+  const t=c.temperature_2m, wind=Math.round(c.wind_speed_10m??0), hum=c.relative_humidity_2m??50;
+  const uv=d?.uv_index_max?.[0]??0;
+  const tmax=d?.temperature_2m_max?.[0]??t;
+  const isDay=c.is_day===1;
+  const raining=(c.precipitation??0)>0;
+  const hour=new Date(c.time).getHours();
+
+  // Probabilitat de pluja: properes ~3 h (per a decisions d'"ara") i resta d'avui
+  let pSoon=0, pToday=0;
+  if(h?.time && h?.precipitation_probability){
+    const nowIso=c.time.slice(0,13), today=c.time.slice(0,10);
+    let s=h.time.findIndex(x=>x.slice(0,13)===nowIso); if(s<0) s=0;
+    for(let i=s;i<Math.min(s+4,h.time.length);i++) pSoon=Math.max(pSoon, h.precipitation_probability[i]??0);
+    for(let i=s;i<h.time.length;i++){ if(h.time[i].slice(0,10)!==today) break; pToday=Math.max(pToday, h.precipitation_probability[i]??0); }
+  } else { pToday=d?.precipitation_probability_max?.[0]??0; pSoon=pToday; }
+
+  const pills=[];
+  if(isDay && uv>=6)
+    pills.push(['warn', `☀️ Protecció solar necessària (UV ${r1(uv)})`]);
+  if(!raining && t<28 && t>=2 && pSoon<20 && wind<20)
+    pills.push(['good', '🏃 Bon moment per córrer']);
+  if(!raining && pSoon<20 && hum<70 && wind>=5 && wind<25)
+    pills.push(['good', '👕 Bon dia per estendre la roba']);
+  if(pToday>60)
+    pills.push(['rain', '🌿 No cal regar el jardí: avui plourà']);
+  else if(!raining && pToday<20 && tmax>=25 && (hour<9 || hour>=20))
+    pills.push(['good', '🌿 Bon moment per regar el jardí']);
+  if(isDay && !raining && pSoon<20 && t>=26 && wind<25)
+    pills.push(['good', '⛱️ Bon dia de platja']);
+  // Comodí de darrera hora: dies suaus que no encaixen amb cap regla anterior
+  if(!raining && t>=10 && t<=26 && wind<30 && pSoon<40)
+    pills.push(['', '🚶 Bona estona per passejar']);
+
+  if(!pills.length) return '';
+  return `<div class="good-for" aria-label="Suggeriments segons el temps">`
+    + pills.slice(0,3).map(([cls,txt])=>`<span class="gf-pill ${cls}">${txt}</span>`).join('')
+    + `</div>`;
+}
+
 function renderNow(loc, fc){
   const c=fc.current, u=fc.current_units;
   const [ , desc] = wmo(c.weather_code);
@@ -1365,8 +1487,10 @@ function renderNow(loc, fc){
         ${rainBadge}
       </div>
     </div>
+    ${renderHeatAlert(fc)}
     ${renderNowcast(fc)}
     <div class="now-stats">${stats}</div>
+    ${renderGoodFor(fc)}
   </div>`;
 }
 
@@ -1395,9 +1519,13 @@ function renderHourly(fc){
 }
 
 /* Mini-gràfic SVG: corba de temperatura + barres de probabilitat de pluja */
-function renderHourlyChart(h, idx){
+function renderHourlyChart(h, idxAll){
+  // A mòbil, 24 hores en un viewBox de 720 px deixen les etiquetes il·legibles:
+  // ensenyem 12 hores en un viewBox estret perquè el text no s'encongeixi tant.
+  const narrow=(window.innerWidth||1024)<560;
+  const idx = narrow ? idxAll.slice(0,13) : idxAll;
   if(idx.length<2) return '';
-  const W=720, H=150, padL=8, padR=8, padT=22, padB=26;
+  const W=narrow?380:720, H=150, padL=8, padR=8, padT=22, padB=26;
   const innerW=W-padL-padR, innerH=H-padT-padB;
   const temps=idx.map(i=>h.temperature_2m[i]);
   const probs=idx.map(i=>h.precipitation_probability[i]??0);
@@ -1407,6 +1535,16 @@ function renderHourlyChart(h, idx){
   const x=k => padL + (n===1?0:(k/(n-1))*innerW);
   const y=t => padT + innerH - ((t-tmin)/(tmax-tmin))*innerH;
 
+  // Franges de nit (ombra suau) a partir d'is_day
+  let bands='';
+  if(h.is_day){
+    const nightIdx=[]; idx.forEach((i,k)=>{ if(h.is_day[i]===0) nightIdx.push(k); });
+    for(const [a,b] of groupRanges(nightIdx)){
+      const x0=Math.max(padL, x(a)-(a===0?0:innerW/(n-1)/2));
+      const x1=Math.min(W-padR, x(b)+(b===n-1?0:innerW/(n-1)/2));
+      bands += `<rect class="night-band" x="${x0.toFixed(1)}" y="${padT}" width="${Math.max(0,x1-x0).toFixed(1)}" height="${innerH}"/>`;
+    }
+  }
   // Barres de pluja (escala 0–100% sobre tota l'alçada interior)
   const barW=innerW/n*0.62;
   let bars='';
@@ -1416,12 +1554,14 @@ function renderHourlyChart(h, idx){
       bars += `<rect class="precip-bar" x="${(x(k)-barW/2).toFixed(1)}" y="${(padT+innerH-bh).toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="2"/>`;
     }
   });
-  // Línia de temperatura
+  // Línia de temperatura (+ àrea degradada per sota)
   const pts=idx.map((i,k)=>`${x(k).toFixed(1)},${y(temps[k]).toFixed(1)}`).join(' ');
-  // Etiquetes de temperatura i hora cada 3 hores
+  const area=`${padL},${padT+innerH} ${pts} ${(W-padR)},${padT+innerH}`;
+  // Etiquetes de temperatura i hora (cada 3 h; cada 2 h en el gràfic estret)
+  const every = narrow?2:3;
   let labels='', dots='';
   idx.forEach((i,k)=>{
-    const showT = (k%3===0) || k===n-1;
+    const showT = (k%every===0) || k===n-1;
     if(showT){
       dots += `<circle class="temp-dot" cx="${x(k).toFixed(1)}" cy="${y(temps[k]).toFixed(1)}" r="2.5"/>`;
       labels += `<text class="temp-lbl" x="${x(k).toFixed(1)}" y="${(y(temps[k])-7).toFixed(1)}" text-anchor="middle">${Math.round(temps[k])}°</text>`;
@@ -1431,8 +1571,13 @@ function renderHourlyChart(h, idx){
         labels += `<text class="precip-lbl" x="${x(k).toFixed(1)}" y="${(padT+innerH-(probs[k]/100)*innerH-3).toFixed(1)}" text-anchor="middle">${probs[k]}%</text>`;
     }
   });
-  return `<svg class="hour-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gràfic de temperatura i pluja per hores">
+  return `<svg class="hour-chart${narrow?' narrow':''}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gràfic de temperatura i pluja per hores">
+    <defs><linearGradient id="hcTempGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop class="hc-stop-a" offset="0"/><stop class="hc-stop-b" offset="1"/>
+    </linearGradient></defs>
+    ${bands}
     <line class="grid-line" x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}"/>
+    <polygon class="temp-area" points="${area}"/>
     ${bars}
     <polyline class="temp-line" points="${pts}"/>
     ${dots}${labels}
@@ -1458,12 +1603,12 @@ function renderDaily(fc){
       <div class="dic" title="${esc(desc)}">${icon}</div>
       <div class="dmid">
         <span class="rain">💧 ${prob??0}%${mm>0?` · ${mm}mm`:''}</span>
-        <span>💨 ${Math.round(d.wind_speed_10m_max[i])} km/h ${compass(d.wind_direction_10m_dominant[i])}</span>
+        <span class="wind">💨 ${Math.round(d.wind_speed_10m_max[i])} km/h ${compass(d.wind_direction_10m_dominant[i])}</span>
       </div>
       <div class="tband">
-        <span class="tmin">${tmin}°</span>
-        <span class="bar" style="width:70px"><span style="position:absolute;left:${leftPct}%;width:${wPct}%;top:0;bottom:0;border-radius:6px;background:linear-gradient(90deg,var(--cold),var(--warm))"></span></span>
-        <span class="tmax">${tmax}°</span>
+        <span class="tmin" aria-label="Mínima ${tmin} graus">${tmin}°</span>
+        <span class="bar" style="width:70px" aria-hidden="true"><span style="position:absolute;left:${leftPct}%;width:${wPct}%;top:0;bottom:0;border-radius:6px;background:linear-gradient(90deg,var(--cold),var(--warm))"></span></span>
+        <span class="tmax" aria-label="Màxima ${tmax} graus">${tmax}°</span>
       </div>
     </div>`;
   }
