@@ -149,6 +149,11 @@ Coses que es poden incorporar més endavant:
   Sense això, un nom de lloc amb codi HTML s'executaria al navegador.
 - Les **coordenades del GPS** s'arrodoneixen amb `coarse()` (~100 m) abans d'enviar-les a la
   geocodificació inversa. No cal més precisió i així no surt la posició exacta del dispositiu.
+- ⚠️ **El mode família (`FAMILY`, `BIRTHDAYS`, `EVENTS`) és públic.** Aquest repo és obert i
+  `index.html` es publica sencer: tothom pot llegir el que hi posis. Regla: **només noms de
+  pila**. Res de cognoms, adreces, telèfons, anys de naixement ni frases com "a casa d'en …".
+  Les coordenades han de ser les del poble, mai les d'una casa. Si algun dia hi vols posar
+  dades de debò, s'han de xifrar — no n'hi ha prou d'amagar-les.
 
 ## 📝 Notes
 

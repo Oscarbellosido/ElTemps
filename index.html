@@ -2597,7 +2597,12 @@ function applyFun(){
 }
 function funPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-/* Família: segons el poble, saluda els qui hi viuen pel nom */
+/* ⚠️ ATENCIÓ — això és PÚBLIC. Aquest fitxer es publica sencer a GitHub Pages i el repo
+   és obert: qualsevol pot llegir el que hi posis aquí i als aniversaris de sota.
+   Regla: NOMÉS noms de pila. Res de cognoms, adreces, telèfons, anys de naixement,
+   ni frases del tipus "a casa d'en …". Les coordenades han de ser les del poble
+   (les mateixes que a QUICK_CITIES), mai les d'una casa.
+   Família: segons el poble, saluda els qui hi viuen pel nom */
 const FAMILY = [
   { town:'Sant Julià de Vilatorta', lat:41.9167, lon:2.3017, names:['Arnau','Mar'] },
   { town:'Barcelona',               lat:41.3888, lon:2.1590, names:['Jordi','Núria','Carles','Ricard','Olga'] },
@@ -2606,7 +2611,8 @@ const FAMILY = [
 ];
 function joinNames(a){ return a.length===1 ? a[0] : a.slice(0,-1).join(', ') + ' i ' + a[a.length-1]; }
 
-/* Aniversaris de la família (dia i mes, cada any) */
+/* Aniversaris de la família (dia i mes, cada any).
+   Igual que a FAMILY: només noms de pila i mai l'any de naixement — això és públic. */
 const BIRTHDAYS = [
   {m:1, d:14, name:'Ricard'}, {m:1, d:14, name:'Gerard'}, {m:1, d:29, name:'Olga'},
   {m:2, d:8,  name:'Martí'},
