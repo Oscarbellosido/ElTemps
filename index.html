@@ -480,7 +480,7 @@ const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 const BUILD_DATE  = '2026-08-12';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1372,9 +1372,13 @@ function renderNowcast(fc){
 /* ── Alerta de calor extrema ──────────────────────────────────────────────────
    Mira les properes 24 h i avisa si la sensació tèrmica (o la temperatura)
    superarà els 35°. Indica el pic i a quina hora arribarà. */
-function renderHeatAlert(fc){
+/* Pic de calor de les properes 24 h, o null si no n'hi ha cap de rellevant (<35°).
+   El comparteixen l'avís de calor i els suggeriments de "bon moment per a…": si
+   cadascun es mirés les dades pel seu compte, l'avís podria dir "evita l'esforç
+   físic" mentre just a sota apareix "bon moment per córrer". */
+function heatPeak(fc){
   const h=fc.hourly, c=fc.current;
-  if(!h?.time || !c?.time) return '';
+  if(!h?.time || !c?.time) return null;
   const nowIso=c.time.slice(0,13);
   let s=h.time.findIndex(t=>t.slice(0,13)===nowIso); if(s<0) s=0;
   const end=Math.min(s+24, h.time.length);
@@ -1385,12 +1389,24 @@ function renderHeatAlert(fc){
     const v=Math.max(ap??-99, te??-99);
     if(!best || v>best.v) best={ v, i, feels:(ap!=null && (te==null || ap>=te)) };
   }
-  if(!best || best.v<35) return '';
-  const extreme=best.v>=40;
-  const when=new Date(h.time[best.i]);
-  const hh=when.getHours().toString().padStart(2,'0')+'h';
-  const whenTxt = best.i===s ? 'ara mateix'
-    : (h.time[best.i].slice(0,10)===c.time.slice(0,10) ? `a les ${hh}` : `demà a les ${hh}`);
+  if(!best || best.v<35) return null;
+  return {
+    v: best.v, i: best.i, feels: best.feels, start: s,
+    hoursAway: best.i - s,                                    // quantes hores falten per al pic
+    extreme: best.v >= 40,
+    hour: new Date(h.time[best.i]).getHours(),
+    sameDay: h.time[best.i].slice(0,10) === c.time.slice(0,10)
+  };
+}
+
+function renderHeatAlert(fc){
+  const h=fc.hourly, c=fc.current;
+  const best=heatPeak(fc);
+  if(!best) return '';
+  const extreme=best.extreme;
+  const hh=best.hour.toString().padStart(2,'0')+'h';
+  const whenTxt = best.i===best.start ? 'ara mateix'
+    : (best.sameDay ? `a les ${hh}` : `demà a les ${hh}`);
   const what = best.feels ? 'la sensació tèrmica arribarà als' : 'la temperatura arribarà als';
   const lvl  = extreme ? 'Calor perillosa' : 'Calor extrema';
   const tip  = extreme
@@ -1425,21 +1441,30 @@ function renderGoodFor(fc){
     for(let i=s;i<h.time.length;i++){ if(h.time[i].slice(0,10)!==today) break; pToday=Math.max(pToday, h.precipitation_probability[i]??0); }
   } else { pToday=d?.precipitation_probability_max?.[0]??0; pSoon=pToday; }
 
+  // Coherència amb l'avís de calor de just a sobre: si el pic és ara mateix no té
+  // sentit suggerir esforç físic, i si arriba més tard ho diem al mateix suggeriment
+  // en comptes de deixar les dues targetes dient coses contràries.
+  const heat = heatPeak(fc);
+  const heatNow   = !!heat && heat.hoursAway <= 2;
+  const heatLater = !!heat && heat.hoursAway > 2 && heat.sameDay;
+
   const pills=[];
   if(isDay && uv>=6)
     pills.push(['warn', `☀️ Protecció solar necessària (UV ${r1(uv)})`]);
-  if(!raining && t<28 && t>=2 && pSoon<20 && wind<20)
-    pills.push(['good', '🏃 Bon moment per córrer']);
+  if(!raining && t<28 && t>=2 && pSoon<20 && wind<20 && !heatNow)
+    pills.push(['good', heatLater
+      ? `🏃 Millor córrer ara: ${Math.round(heat.v)}° a les ${heat.hour}h`
+      : '🏃 Bon moment per córrer']);
   if(!raining && pSoon<20 && hum<70 && wind>=5 && wind<25)
     pills.push(['good', '👕 Bon dia per estendre la roba']);
   if(pToday>60)
     pills.push(['rain', '🌿 No cal regar el jardí: avui plourà']);
   else if(!raining && pToday<20 && tmax>=25 && (hour<9 || hour>=20))
     pills.push(['good', '🌿 Bon moment per regar el jardí']);
-  if(isDay && !raining && pSoon<20 && t>=26 && wind<25)
+  if(isDay && !raining && pSoon<20 && t>=26 && wind<25 && !heat?.extreme)
     pills.push(['good', '⛱️ Bon dia de platja']);
   // Comodí de darrera hora: dies suaus que no encaixen amb cap regla anterior
-  if(!raining && t>=10 && t<=26 && wind<30 && pSoon<40)
+  if(!raining && t>=10 && t<=26 && wind<30 && pSoon<40 && !heatNow)
     pills.push(['', '🚶 Bona estona per passejar']);
 
   if(!pills.length) return '';
