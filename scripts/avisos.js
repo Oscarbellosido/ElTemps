@@ -20,6 +20,8 @@ const webpush = require('web-push');
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC || '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 const SUBS_RAW = process.env.PUSH_SUBS || '';
+/* Prova forçada des de la pestanya Actions. GitHub passa les caselles com a text. */
+const PROVA = /^(true|1)$/i.test((process.env.PROVA || '').trim());
 const SITE = 'https://oscarbellosido.github.io/ElTemps/';
 
 /* Llindars. Si algun dia et sembla que avisa massa (o massa poc), es toquen aquí. */
@@ -102,6 +104,19 @@ function linkFor(sub) {
 
 /* Decideix si toca avisar. Torna null quan no hi ha res a dir. */
 function buildMessage(fc, sub) {
+  // Mode de prova: forçat des de la pestanya Actions marcant la casella "prova".
+  // Serveix per comprovar que l'avís arriba al mòbil i al rellotge sense haver
+  // d'esperar que faci calor de debò.
+  if (PROVA) {
+    const ara = fc.current?.temperature_2m;
+    return {
+      title: `🔔 Prova d'avís${sub.name ? ' · ' + sub.name : ''}`,
+      body: `Si llegeixes això, els avisos funcionen.${ara != null ? ` Ara hi fa ${Math.round(ara)}°.` : ''}`,
+      tag: 'prova',
+      url: linkFor(sub)
+    };
+  }
+
   // L'hora local del poble surt de la mateixa resposta d'Open-Meteo (demanem
   // timezone=auto), no del rellotge del servidor: així val igual on s'executi.
   const localHour = parseInt(fc.current.time.slice(11, 13), 10);

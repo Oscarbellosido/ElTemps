@@ -189,8 +189,20 @@ sembla que avisa massa o massa poc.
 
 ### Provar-ho sense esperar
 
-A la pestanya **Actions → Avisos del temps → Run workflow** es llança a l'instant. El
-registre de l'execució diu per a cada telèfon si s'ha enviat res i, si ha fallat, per què.
+A la pestanya **Actions → Avisos del temps → Run workflow** es llança a l'instant. Si a
+més marques la casella **prova**, s'envia un avís de mentida encara que no faci calor ni
+hagi de ploure: serveix per comprovar que arriba al mòbil i al rellotge.
+
+El registre de l'execució diu, per a cada telèfon, si s'ha enviat res i, si ha fallat, per què:
+
+```
+1 telèfon(s) donats d'alta.
+· Taradell: res a avisar.
+Resum: 0 enviat(s), 1 sense novetat, 0 amb error.
+```
+
+Si surt `res a avisar` no és cap error: vol dir que ha mirat el temps i no hi havia
+res prou destacable, o que era fora de la franja horària de la regla.
 
 ## 🔒 Seguretat (llegeix-ho abans d'editar `index.html`)
 

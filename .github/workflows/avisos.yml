@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: '0 * * * *'      # cada hora, en punt (hora UTC)
   workflow_dispatch:          # i també a mà, des de la pestanya Actions
+    inputs:
+      prova:
+        description: 'Enviar un avís de prova ara mateix (encara que no faci calor ni hagi de ploure)'
+        type: boolean
+        default: false
 
 # Aquesta tasca només llegeix el codi; no ha de poder tocar res del repositori.
 permissions:
@@ -41,4 +46,5 @@ jobs:
           VAPID_PUBLIC: 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk'
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           PUSH_SUBS: ${{ secrets.PUSH_SUBS }}
+          PROVA: ${{ inputs.prova }}
         run: node scripts/avisos.js
