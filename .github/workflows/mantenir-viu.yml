@@ -1,0 +1,50 @@
+# Manté viva la tasca d'avisos.
+#
+# GitHub desactiva les tasques programades quan un repositori passa 60 dies sense
+# cap canvi. Si això passés, deixaries de rebre els avisos de calor i pluja sense
+# adonar-te'n (només arriba un correu fàcil de passar per alt).
+#
+# Aquesta tasca s'executa cada dilluns i mira quants dies fa de l'últim canvi:
+#   · menys de 50 dies  → no fa RES (el cas normal, no embruta l'historial)
+#   · 50 dies o més     → fa un commit buit, que reinicia el compte enrere
+#
+# Actua als 50 dies i no als 59 per tenir marge: les tasques programades de GitHub
+# es retarden i de vegades se salten execucions.
+name: Mantenir viva la tasca d'avisos
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'      # cada dilluns de matinada (hora UTC)
+  workflow_dispatch:
+
+# L'única tasca del repositori que pot escriure-hi, i només per fer aquest commit buit.
+permissions:
+  contents: write
+
+jobs:
+  mantenir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # cal l'historial per saber la data de l'últim commit
+
+      - name: Fer un commit buit només si fa massa que no es toca el repositori
+        run: |
+          set -euo pipefail
+          ultim=$(git log -1 --format=%ct)
+          ara=$(date +%s)
+          dies=$(( (ara - ultim) / 86400 ))
+          echo "Fa $dies dies de l'últim canvi al repositori."
+
+          if [ "$dies" -lt 50 ]; then
+            echo "Encara queda marge. No cal fer res."
+            exit 0
+          fi
+
+          echo "Passen de 50 dies: es fa un commit buit perquè GitHub no desactivi els avisos."
+          git config user.name  'Manteniment automàtic'
+          git config user.email 'actions@github.com'
+          git commit --allow-empty -m 'Mantenir activa la tasca d'"'"'avisos (commit buit automàtic)'
+          git push

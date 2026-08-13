@@ -187,6 +187,18 @@ sembla que avisa massa o massa poc.
 > ⚠️ Els criteris de calor de `scripts/avisos.js` són una còpia de `heatPeak()` de
 > `index.html`. Si en canvies un, canvia l'altre, o l'avís i la pantalla diran coses diferents.
 
+### Que no es desactivi sola
+
+GitHub apaga les tasques programades quan un repositori passa **60 dies sense cap canvi**.
+Si passés, deixaries de rebre avisos sense adonar-te'n. Per evitar-ho hi ha
+`.github/workflows/mantenir-viu.yml`, que cada dilluns mira quant fa de l'últim canvi:
+
+- **menys de 50 dies** → no fa res (el cas normal: no embruta l'historial)
+- **50 dies o més** → fa un commit buit, que reinicia el compte enrere
+
+Actua als 50 i no als 59 per tenir marge, perquè les tasques programades de GitHub es
+retarden. És l'única tasca del repositori amb permís d'escriptura, i només per això.
+
 ### Provar-ho sense esperar
 
 A la pestanya **Actions → Avisos del temps → Run workflow** es llança a l'instant. Si a
