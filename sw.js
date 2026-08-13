@@ -7,7 +7,7 @@
    - Estàtics propis: cache-first amb actualització.
    - Peticions externes (APIs, tiles, Meteoalarm…): sempre a la xarxa.
    ════════════════════════════════════════════════════════════════════════════ */
-const CACHE = 'eltemps-v22';
+const CACHE = 'eltemps-v23';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png',
                './vendor/leaflet.js', './vendor/leaflet.css'];
 
@@ -57,6 +57,10 @@ self.addEventListener('push', e => {
     badge: './icon-192.png',
     tag: d.tag || 'eltemps-avis',      // un avís del mateix tipus en reemplaça un altre
     renotify: true,
+    // Patró de vibració: marca la notificació com a "avís que ha de sonar" i no com
+    // una de silenciosa. Alguns rellotges no repeteixen al canell les silencioses.
+    vibrate: [200, 100, 200],
+    silent: false,
     data: { url: d.url || './' }
   };
   e.waitUntil(self.registration.showNotification(title, opts));
