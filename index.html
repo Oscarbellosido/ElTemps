@@ -452,6 +452,8 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .notif-steps code { background:var(--bg-primary); border:1px solid var(--border); border-radius:6px;
   padding:.1rem .35rem; font-size:.85rem; color:var(--accent); }
 .notif-note { margin-top:1.1rem; font-size:.78rem; line-height:1.55; color:var(--text-secondary); }
+.notif-off { display:block; width:100%; margin-top:.9rem; padding:.5rem; border:none; background:none;
+  color:var(--text-secondary); font-size:.78rem; text-decoration:underline; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -500,7 +502,7 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 const BUILD_DATE  = '2026-08-13';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -858,26 +860,22 @@ function b64ToU8(s){
   const raw=atob((s+pad).replace(/-/g,'+').replace(/_/g,'/'));
   return Uint8Array.from(raw, c=>c.charCodeAt(0));
 }
+/* Prémer el botó SEMPRE ensenya el text per enganxar a GitHub; mai apaga res.
+   Abans era un interruptor, i prémer-lo un segon cop donava de baixa el telèfon
+   sense avisar: el codi que ja havies posat al secret PUSH_SUBS quedava mort i
+   l'enviament fallava amb un 410. Per apagar-los, ara cal fer-ho des del diàleg. */
 async function toggleNotif(){
   const b=$('notifBtn');
-  if(!notifSupported()) return;
-  if(notifOn()){
-    try{
-      const reg=await navigator.serviceWorker.ready;
-      const s=await reg.pushManager.getSubscription();
-      if(s) await s.unsubscribe();
-    }catch{}
-    localStorage.removeItem(NOTIF_KEY); updateNotifBtn();
-    return;
-  }
-  if(!currentLoc) return;
+  if(!notifSupported() || !currentLoc) return;
   try{
-    if(b){ b.disabled=true; b.textContent='🔔 Activant…'; }
-    const perm=await Notification.requestPermission();
-    if(perm!=='granted'){ showNotifDialog(null, perm==='denied'?'denied':'default'); return; }
+    if(b){ b.disabled=true; b.textContent='🔔 Un moment…'; }
     const reg=await navigator.serviceWorker.ready;
     let sub=await reg.pushManager.getSubscription();
-    if(!sub) sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC) });
+    if(!sub){
+      const perm=await Notification.requestPermission();
+      if(perm!=='granted'){ showNotifDialog(null, perm==='denied'?'denied':'default'); return; }
+      sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC) });
+    }
     const j=sub.toJSON();
     localStorage.setItem(NOTIF_KEY,'1');
     showNotifDialog(JSON.stringify([{
@@ -890,6 +888,16 @@ async function toggleNotif(){
     if(b) b.disabled=false;
     updateNotifBtn();
   }
+}
+/* Donar de baixa aquest telèfon. Només des del diàleg, mai per error. */
+async function disableNotif(){
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const s=await reg.pushManager.getSubscription();
+    if(s) await s.unsubscribe();
+  }catch{}
+  localStorage.removeItem(NOTIF_KEY);
+  closeNotifDialog(); updateNotifBtn();
 }
 function closeNotifDialog(){ const el=$('notifOverlay'); if(el) el.remove(); }
 function copyNotifSub(){
@@ -930,7 +938,9 @@ function showNotifDialog(payload, state, msg){
         <li>Prem <strong>Add secret</strong>. Ja està.</li>
       </ol>
       <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta o pluja a punt de caure.
-      Si ja tenies un altre telèfon donat d'alta, edita el secret i afegeix-hi aquest, separat per una coma.</p>`;
+      Si ja tenies un altre telèfon donat d'alta, edita el secret i afegeix-hi aquest, separat per una coma.
+      <br><br>Pots tornar a prémer <strong>🔔</strong> quan vulguis per recuperar aquest text: no apaga res.</p>
+      <button class="notif-off" onclick="disableNotif()">Desactivar els avisos en aquest telèfon</button>`;
   }
   const d=document.createElement('div');
   d.id='notifOverlay'; d.className='welcome-overlay';
