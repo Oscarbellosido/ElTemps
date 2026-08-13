@@ -112,7 +112,10 @@ function buildMessage(fc, sub) {
     return {
       title: `🔔 Prova d'avís${sub.name ? ' · ' + sub.name : ''}`,
       body: `Si llegeixes això, els avisos funcionen.${ara != null ? ` Ara hi fa ${Math.round(ara)}°.` : ''}`,
-      tag: 'prova',
+      // Etiqueta diferent a cada prova. Amb una de fixa, si l'avís anterior encara
+      // era a la safata del mòbil, el nou el substituïa en silenci i el rellotge no
+      // tornava a vibrar. Als avisos de debò sí que interessa reemplaçar (tag fix).
+      tag: 'prova-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
       url: linkFor(sub)
     };
   }
