@@ -138,6 +138,60 @@ Coses que es poden incorporar més endavant:
 
 ---
 
+## 🔔 Avisos al mòbil (i al rellotge)
+
+L'app pot avisar-te al telèfon quan es prevegi **calor forta** o **pluja a punt de caure**,
+encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís hi arriba
+sol: el rellotge repeteix les notificacions del mòbil, no cal cap app de rellotge.
+
+### Com s'activa (un sol cop per telèfon)
+
+1. Obre l'app, tria la població i prem **🔔 Avisa'm**.
+2. Accepta el permís de notificacions.
+3. Surt un quadre amb un text: copia'l.
+4. Ves a **Settings → Secrets and variables → Actions** del repositori, prem
+   **New repository secret**, posa-li de nom `PUSH_SUBS` i enganxa-hi el text.
+
+Per donar d'alta un segon telèfon, repeteix-ho i afegeix el nou bloc dins del mateix
+secret, separat per una coma.
+
+### Com funciona per dins
+
+| Peça | Què fa |
+|---|---|
+| Botó **🔔 Avisa'm** a `index.html` | Demana permís i crea la subscripció del telèfon |
+| `sw.js` (esdeveniment `push`) | Rep l'avís i el mostra com a notificació del sistema |
+| `.github/workflows/avisos.yml` | Cada hora engega la comprovació (i es pot llançar a mà) |
+| `scripts/avisos.js` | Mira el temps de cada telèfon i decideix si cal avisar |
+
+**Secrets que fa servir** (a *Settings → Secrets and variables → Actions*):
+
+- `VAPID_PRIVATE_KEY` — la clau privada que signa els avisos. **No ha d'anar mai al codi.**
+- `PUSH_SUBS` — els telèfons donats d'alta.
+
+La clau **pública** sí que és al codi (a `index.html` i al workflow): és pública a propòsit.
+
+### Quan avisa i quan calla
+
+Per no rebre l'avís repetit cada hora, **no es desa enlloc què s'ha enviat**. En comptes
+d'això, cada regla només pot disparar en un moment concret:
+
+- **Calor** (pic ≥ 35°, o ≥ 40° per a l'avís seriós): només entre les **7 i les 9 del matí**,
+  o sigui un cop al dia.
+- **Pluja** (≥ 60% de probabilitat en les properes 2 h): només **si encara no plou** — quan
+  comença, la condició deixa de complir-se sola — i només entre les **7 i les 22 h**.
+
+Els llindars són al principi de `scripts/avisos.js`, ben visibles, per si algun dia et
+sembla que avisa massa o massa poc.
+
+> ⚠️ Els criteris de calor de `scripts/avisos.js` són una còpia de `heatPeak()` de
+> `index.html`. Si en canvies un, canvia l'altre, o l'avís i la pantalla diran coses diferents.
+
+### Provar-ho sense esperar
+
+A la pestanya **Actions → Avisos del temps → Run workflow** es llança a l'instant. El
+registre de l'execució diu per a cada telèfon si s'ha enviat res i, si ha fallat, per què.
+
 ## 🔒 Seguretat (llegeix-ho abans d'editar `index.html`)
 
 - Hi ha una **Content-Security-Policy** a la capçalera de `index.html`. Limita a quins servidors

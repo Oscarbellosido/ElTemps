@@ -436,6 +436,22 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   font-size:1rem; font-weight:700; cursor:pointer; transition:opacity .15s;
 }
 .welcome-close:hover { opacity:.88; }
+/* Diàleg dels avisos */
+.notif-sub {
+  width:100%; margin:.9rem 0 .5rem; padding:.6rem .7rem; border-radius:12px;
+  background:var(--bg-primary); border:1px solid var(--border); color:var(--text-secondary);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.68rem; line-height:1.45;
+  resize:vertical; word-break:break-all;
+}
+.notif-copy {
+  width:100%; padding:.6rem; border-radius:12px; border:1px solid var(--accent);
+  background:transparent; color:var(--accent); font-size:.9rem; font-weight:700; cursor:pointer;
+}
+.notif-steps { margin:1.2rem 0 0; padding-left:1.2rem; display:flex; flex-direction:column; gap:.5rem; }
+.notif-steps li { font-size:.87rem; line-height:1.5; }
+.notif-steps code { background:var(--bg-primary); border:1px solid var(--border); border-radius:6px;
+  padding:.1rem .35rem; font-size:.85rem; color:var(--accent); }
+.notif-note { margin-top:1.1rem; font-size:.78rem; line-height:1.55; color:var(--text-secondary); }
 </style>
 </head>
 <body>
@@ -479,9 +495,13 @@ const THEME_KEY    = 'eltemps_theme';
 const FUN_KEY      = 'eltemps_fun';
 const OFFLINE_KEY  = 'eltemps_offline_v1';
 const WELCOME_KEY  = 'eltemps_welcomed';
+const NOTIF_KEY    = 'eltemps_notif';
+/* Clau pública dels avisos (VAPID). És pública a propòsit: va dins la pàgina i identifica
+   qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
+const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.4.3';
-const BUILD_DATE  = '2026-08-12';
+const APP_VERSION = '1.5.0';
+const BUILD_DATE  = '2026-08-13';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -814,6 +834,115 @@ function shareCurrent(){
   else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>{ const b=$('shareBtn'); if(b){ const o=b.textContent; b.textContent='✓ Copiat'; setTimeout(()=>b.textContent=o,1500); } }); }
 }
 
+/* ── Avisos al mòbil (notificacions push) ────────────────────────────────────
+   El navegador crea una "subscripció": una adreça secreta per avisar AQUEST
+   telèfon. Es copia un sol cop al secret PUSH_SUBS del repositori, i la tasca
+   .github/workflows/avisos.yml mira el temps cada hora i, quan hi ha calor
+   forta o pluja a punt de caure, envia l'avís. Al rellotge hi arriba sol,
+   perquè Wear OS repeteix al canell les notificacions del mòbil. */
+function notifSupported(){
+  return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+}
+function notifOn(){ return localStorage.getItem(NOTIF_KEY)==='1'; }
+function updateNotifBtn(){
+  const b=$('notifBtn'); if(!b) return;
+  if(!notifSupported()){ b.style.display='none'; return; }
+  b.textContent = notifOn() ? '🔔 Avisos actius' : '🔔 Avisa\'m';
+  b.classList.toggle('on', notifOn());
+  b.title = notifOn() ? 'Avisos activats en aquest telèfon — toca per apagar-los'
+                      : 'Rebre avisos de calor forta i pluja en aquest telèfon';
+}
+/* base64url → bytes: el format que demana applicationServerKey */
+function b64ToU8(s){
+  const pad='='.repeat((4-s.length%4)%4);
+  const raw=atob((s+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from(raw, c=>c.charCodeAt(0));
+}
+async function toggleNotif(){
+  const b=$('notifBtn');
+  if(!notifSupported()) return;
+  if(notifOn()){
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      const s=await reg.pushManager.getSubscription();
+      if(s) await s.unsubscribe();
+    }catch{}
+    localStorage.removeItem(NOTIF_KEY); updateNotifBtn();
+    return;
+  }
+  if(!currentLoc) return;
+  try{
+    if(b){ b.disabled=true; b.textContent='🔔 Activant…'; }
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ showNotifDialog(null, perm==='denied'?'denied':'default'); return; }
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC) });
+    const j=sub.toJSON();
+    localStorage.setItem(NOTIF_KEY,'1');
+    showNotifDialog(JSON.stringify([{
+      name: currentLoc.name, lat: coarse(currentLoc.lat), lon: coarse(currentLoc.lon),
+      endpoint: j.endpoint, keys: j.keys
+    }], null, 1));
+  }catch(e){
+    showNotifDialog(null, 'error', e?.message||String(e));
+  }finally{
+    if(b) b.disabled=false;
+    updateNotifBtn();
+  }
+}
+function closeNotifDialog(){ const el=$('notifOverlay'); if(el) el.remove(); }
+function copyNotifSub(){
+  const ta=$('notifSub'); if(!ta) return;
+  ta.select(); ta.setSelectionRange(0, 99999);
+  const done=()=>{ const b=$('notifCopyBtn'); if(b){ b.textContent='✓ Copiat'; setTimeout(()=>b.textContent='📋 Copiar',1600); } };
+  if(navigator.clipboard) navigator.clipboard.writeText(ta.value).then(done, ()=>{ try{ document.execCommand('copy'); done(); }catch{} });
+  else { try{ document.execCommand('copy'); done(); }catch{} }
+}
+function showNotifDialog(payload, state, msg){
+  closeNotifDialog();
+  const SECRET_URL='https://github.com/Oscarbellosido/ElTemps/settings/secrets/actions';
+  let inner;
+  if(state==='denied'){
+    inner=`<h2>Avisos bloquejats</h2>
+      <p class="welcome-sub">Aquest telèfon té els avisos denegats per a aquesta pàgina.</p>
+      <p style="font-size:.87rem;line-height:1.6">Per permetre'ls: toca el <strong>cadenat 🔒</strong> al costat de
+      l'adreça, entra a <strong>Permisos</strong> i activa les <strong>Notificacions</strong>. Després torna a provar-ho.</p>`;
+  } else if(state==='error'){
+    inner=`<h2>No s'han pogut activar</h2>
+      <p class="welcome-sub">Hi ha hagut un problema en preparar els avisos.</p>
+      <p style="font-size:.83rem;color:var(--text-secondary);word-break:break-word">${esc(msg||'')}</p>
+      <p style="font-size:.87rem;line-height:1.6;margin-top:.8rem">Sol passar si la pàgina no està
+      instal·lada com a aplicació. Prova d'instal·lar-la i torna-ho a provar.</p>`;
+  } else if(state==='default'){
+    inner=`<h2>Falta el permís</h2>
+      <p class="welcome-sub">No has contestat a la pregunta dels avisos. Torna a tocar el botó i tria <strong>Permetre</strong>.</p>`;
+  } else {
+    inner=`<h2>Un últim pas</h2>
+      <p class="welcome-sub">Copia aquest text i enganxa'l a GitHub. Només cal fer-ho un cop.</p>
+      <textarea id="notifSub" class="notif-sub" readonly rows="5">${esc(payload)}</textarea>
+      <button id="notifCopyBtn" class="notif-copy" onclick="copyNotifSub()">📋 Copiar</button>
+      <ol class="notif-steps">
+        <li>Obre <a href="${SECRET_URL}" target="_blank" rel="noopener">els secrets del repositori</a>.</li>
+        <li>Prem <strong>New repository secret</strong>.</li>
+        <li>A <strong>Name</strong> escriu-hi exactament: <code>PUSH_SUBS</code></li>
+        <li>A <strong>Secret</strong> enganxa el text copiat.</li>
+        <li>Prem <strong>Add secret</strong>. Ja està.</li>
+      </ol>
+      <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta o pluja a punt de caure.
+      Si ja tenies un altre telèfon donat d'alta, edita el secret i afegeix-hi aquest, separat per una coma.</p>`;
+  }
+  const d=document.createElement('div');
+  d.id='notifOverlay'; d.className='welcome-overlay';
+  d.innerHTML=`<div class="welcome-card">
+    <span class="welcome-logo">🔔</span>
+    ${inner}
+    <button class="welcome-close" onclick="closeNotifDialog()">Entesos ✓</button>
+  </div>`;
+  d.addEventListener('click', e=>{ if(e.target===d) closeNotifDialog(); });
+  document.body.appendChild(d);
+}
+
 /* ── Cache offline (localStorage) ───────────────────────────────────────────── */
 let offlineMode = false;
 function saveOfflineCache(loc, fc){ try{ localStorage.setItem(OFFLINE_KEY, JSON.stringify({ loc, fc, ts:Date.now() })); }catch{} }
@@ -965,7 +1094,7 @@ async function loadWeather(loc, opts={}){
     // penjat; com que aquest silenciós és el gen guanyador, ha de netejar l'estat i mostrar el resultat.
     else hideStatus();
     $('result').classList.add('show');
-    updateFavBtn(); updateFreshness();
+    updateFavBtn(); updateNotifBtn(); updateFreshness();
     loadAlerts(loc, gen);   // avisos oficials (asíncron, no bloqueja el temps)
   }catch(e){
     if(gen!==loadGen) return;
@@ -975,7 +1104,7 @@ async function loadWeather(loc, opts={}){
         currentFc = cached.fc; lastLoadTime = cached.ts; offlineMode = true;
         render(cached.loc, cached.fc, null, null, null);
         $('result').classList.add('show');
-        updateFavBtn(); updateFreshness();
+        updateFavBtn(); updateNotifBtn(); updateFreshness();
       } else {
         showStatus('No s\'han pogut carregar les dades meteorològiques. Comprova la connexió i torna-ho a provar.','error');
       }
@@ -1331,6 +1460,7 @@ function renderSummary(loc, fc, models, air){
       <div class="now-actions">
         <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
         <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
+        <button id="notifBtn" class="icon-btn" onclick="toggleNotif()" title="Avisos al mòbil">🔔 Avisa'm</button>
       </div>
     </div>
     <p class="sum-text">${txt}</p>

@@ -7,7 +7,7 @@
    - Estàtics propis: cache-first amb actualització.
    - Peticions externes (APIs, tiles, Meteoalarm…): sempre a la xarxa.
    ════════════════════════════════════════════════════════════════════════════ */
-const CACHE = 'eltemps-v20';
+const CACHE = 'eltemps-v21';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png',
                './vendor/leaflet.js', './vendor/leaflet.css'];
 
@@ -41,6 +41,42 @@ function fetchTimeout(req, ms) {
     fetch(req).then(r => { clearTimeout(t); resolve(r); }, err => { clearTimeout(t); reject(err); });
   });
 }
+
+/* ── Avisos (push) ───────────────────────────────────────────────────────────
+   La tasca horària de GitHub envia un missatge amb {title, body, url} i aquí es
+   converteix en una notificació del sistema. Wear OS la repeteix al canell tot sol.
+   El navegador OBLIGA a mostrar-ne una: si el missatge arribés buit o trencat,
+   igualment se n'ensenya una de genèrica, o el navegador acabaria retirant el permís. */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = {}; }
+  const title = d.title || 'El Temps';
+  const opts = {
+    body: d.body || 'Toca per veure la previsió.',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: d.tag || 'eltemps-avis',      // un avís del mateix tipus en reemplaça un altre
+    renotify: true,
+    data: { url: d.url || './' }
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = new URL(e.notification.data?.url || './', self.location.href).href;
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      // Si l'app ja és oberta, la portem al davant en comptes d'obrir-ne una altra
+      if (c.url.startsWith(self.location.origin) && 'focus' in c) {
+        try { await c.navigate(target); } catch {}
+        return c.focus();
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(target);
+  })());
+});
 
 self.addEventListener('fetch', e => {
   const req = e.request;

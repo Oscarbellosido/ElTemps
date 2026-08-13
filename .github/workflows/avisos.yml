@@ -1,0 +1,44 @@
+# Avisos del temps al mòbil.
+# S'executa sol cada hora i, si hi ha calor forta o pluja a punt de caure, envia
+# un avís als telèfons donats d'alta al secret PUSH_SUBS. La lògica és a
+# scripts/avisos.js; aquí només es diu quan s'ha d'executar i amb quins secrets.
+#
+# Es pot llançar a mà des de la pestanya Actions (botó "Run workflow") per provar-ho
+# sense esperar-se a l'hora en punt.
+name: Avisos del temps
+
+on:
+  schedule:
+    - cron: '0 * * * *'      # cada hora, en punt (hora UTC)
+  workflow_dispatch:          # i també a mà, des de la pestanya Actions
+
+# Aquesta tasca només llegeix el codi; no ha de poder tocar res del repositori.
+permissions:
+  contents: read
+
+# Si una execució s'encavalca amb l'anterior, es queda només l'última.
+concurrency:
+  group: avisos
+  cancel-in-progress: false
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instal·lar la llibreria d'enviament
+        run: npm install --no-save --no-audit --no-fund web-push@3.6.7
+
+      - name: Mirar el temps i avisar si cal
+        env:
+          # La clau pública no és cap secret: és la mateixa que hi ha a index.html.
+          VAPID_PUBLIC: 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk'
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          PUSH_SUBS: ${{ secrets.PUSH_SUBS }}
+        run: node scripts/avisos.js
