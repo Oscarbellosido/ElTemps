@@ -383,6 +383,11 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 #radarSlider { flex:1; min-width:0; accent-color:var(--accent); cursor:pointer; }
 .radar-time { font-size:.78rem; color:var(--text-secondary); flex:0 0 auto; min-width:10rem; }
 .radar-nowcast { color:var(--accent); }
+.radar-model { color:var(--warm); }
+.radar-legend { display:none; align-items:center; flex-wrap:wrap; gap:.3rem .55rem; margin-top:.55rem; font-size:.7rem; color:var(--text-secondary); }
+.radar-legend .rl-lab { font-weight:700; }
+.radar-legend .rl-b { display:inline-flex; align-items:center; gap:.25rem; }
+.radar-legend .rl-b i { width:.9rem; height:.6rem; border-radius:2px; }
 
 /* ── Favorits / compartir / frescor ─────────────────────────────────────────── */
 .chip.fav { border-color:rgba(251,191,36,.4); }
@@ -502,8 +507,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.5.2';
-const BUILD_DATE  = '2026-08-13';
+const APP_VERSION = '1.6.0';
+const BUILD_DATE  = '2026-08-24';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -2539,7 +2544,7 @@ function renderAir(air){
 }
 
 /* ── Radar de pluja (RainViewer + Leaflet) ──────────────────────────────────── */
-let radarMap=null, radarLayers=[], radarFrames=[], radarIdx=0, radarTimer=null, radarObserver=null;
+let radarMap=null, radarLayers=[], radarFrames=[], radarIdx=0, radarTimer=null, radarObserver=null, radarGen=0;
 /* La resposta de RainViewer diu a quin host i camí són les tiles. Com que amb això
    construïm URLs, validem que el host sigui HTTPS i de rainviewer.com, i que el camí
    sigui un camí normal. Si no ho és, no dibuixem el radar (millor sense que no pas
@@ -2591,14 +2596,19 @@ function scheduleRadar(loc){
 
 function renderRadar(){
   return `<div class="card">
-    <h2><span class="ic">🌧️</span> Radar de pluja <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· RainViewer</span></h2>
+    <h2><span class="ic">🌧️</span> Radar de pluja <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· RainViewer + model</span></h2>
     <div id="radar-map"></div>
     <div class="radar-controls" id="radarControls" style="visibility:hidden">
       <button class="btn-sec" id="radarPlayBtn" onclick="toggleRadarPlay()">▶</button>
       <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" oninput="showRadarFrame(+this.value)">
       <span id="radarTime" class="radar-time">Carregant…</span>
     </div>
-    <p class="card-note">Radar de precipitació en temps real · Previsió a curt termini inclosa · Dades: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a></p>
+    <div class="radar-legend" id="radarLegend">
+      <span class="rl-lab">Pluja prevista (mm/h)</span>
+      ${RADAR_FC_BANDS.map(b=>`<span class="rl-b"><i style="background:rgb(${b.c.join(',')})"></i>${String(b.min).replace('.',',')}</span>`).join('')}
+    </div>
+    <p class="card-note">Radar de precipitació en temps real i extrapolació a 30 min · Dades: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>.
+      Les hores següents (◈) ja no són radar sinó la pluja horària que preveu el model d'<a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.</p>
   </div>`;
 }
 
@@ -2608,7 +2618,8 @@ async function initRadar(loc){
   if(typeof L==='undefined') return;
   if(radarTimer){ clearInterval(radarTimer); radarTimer=null; }
   if(radarMap){ radarMap.remove(); radarMap=null; }
-  radarLayers=[]; radarFrames=[]; radarIdx=0;
+  radarLayers=[]; radarFrames=[]; radarIdx=0; radarGen++;
+  const gen=radarGen;
   const el=$('radar-map'); if(!el) return;
 
   radarMap=L.map('radar-map',{ zoomControl:true }).setView([loc.lat,loc.lon],7);
@@ -2650,6 +2661,7 @@ async function initRadar(loc){
     const slider=$('radarSlider'); if(slider) slider.max=radarFrames.length-1;
     showRadarFrame(past.length>0 ? past.length-1 : 0);
     const ctrl=$('radarControls'); if(ctrl) ctrl.style.visibility='visible';
+    loadRadarForecast(loc, gen);   // s'afegeix sola quan arriba; el radar ja es pot fer servir
   }catch(e){
     const t=$('radarTime'); if(t) t.textContent='No s\'ha pogut carregar el radar.';
   }
@@ -2666,9 +2678,123 @@ function showRadarFrame(idx){
   const d=new Date(f.time*1000);
   const hh=d.getHours().toString().padStart(2,'0'), mm=d.getMinutes().toString().padStart(2,'0');
   const t=$('radarTime');
-  if(t) t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
-    +(f.type==='nowcast'?' <span class="radar-nowcast">◎ previsió</span>':'');
+  if(t){
+    if(f.type==='model'){
+      // la pluja horària del model és la de l'hora que acaba en aquesta marca: 17–18 h
+      const h0=new Date(f.time*1000-36e5).getHours();
+      t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${h0}–${d.getHours()} h`
+        +` <span class="radar-model">◈ model +${f.plus} h</span>`;
+    }else{
+      t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
+        +(f.type==='nowcast'?' <span class="radar-nowcast">◎ previsió</span>':'');
+    }
+  }
+  const lg=$('radarLegend'); if(lg) lg.style.display = f.type==='model' ? 'flex' : 'none';
   const slider=$('radarSlider'); if(slider) slider.value=idx;
+}
+
+/* ── Previsió de pluja a hores vista sobre el radar ──────────────────────────── */
+/* RainViewer només extrapola les imatges del radar mitja hora. Per veure cap on va la
+   tempesta més enllà d'això, allarguem la línia de temps amb la pluja horària que preveu
+   el model: es demana una graella de punts al voltant de la ubicació a Open-Meteo i es
+   pinta al mapa interpolada. NO és radar (és la previsió d'un model, més gruixuda i menys
+   fiable com més lluny va), i per això aquests fotogrames surten marcats a part amb ◈. */
+const RADAR_FC_N     = 15;      // punts per costat de la graella (15×15 = 225 punts)
+const RADAR_FC_STEP  = 0.3;     // graus de latitud entre punts (~33 km)
+const RADAR_FC_HOURS = 6;       // hores de previsió que s'afegeixen al final
+const RADAR_FC_PX    = 256;     // mida en píxels del llenç que es projecta al mapa
+const RADAR_FC_TTL   = 20*60e3; // la previsió horària no canvia més sovint que això
+/* Escala de color per intensitat (mm en una hora), a l'estil del radar: blau fluix →
+   verd → groc → taronja → vermell → magenta. Per sota de 0,1 mm no es pinta res. */
+const RADAR_FC_BANDS = [
+  { min:0.1, c:[ 96,165,250], a:150 },
+  { min:0.5, c:[ 56,189,248], a:170 },
+  { min:1,   c:[ 34,197, 94], a:185 },
+  { min:2,   c:[250,204, 21], a:195 },
+  { min:5,   c:[249,115, 22], a:205 },
+  { min:10,  c:[239, 68, 68], a:215 },
+  { min:20,  c:[217, 70,239], a:225 }
+];
+
+async function fetchRadarForecast(loc){
+  const ck=`eltemps_radarfc_${loc.lat.toFixed(1)},${loc.lon.toFixed(1)}`;
+  const c=cacheGet(ck, RADAR_FC_TTL); if(c) return c;
+  const half=(RADAR_FC_N-1)/2, dLat=RADAR_FC_STEP;
+  // a les nostres latituds un grau de longitud és més curt que un de latitud: escalant-lo
+  // les caselles queden aproximadament quadrades sobre el terreny
+  const dLon=RADAR_FC_STEP/Math.max(0.25, Math.cos(loc.lat*Math.PI/180));
+  const lat0=loc.lat-half*dLat, lon0=loc.lon-half*dLon;
+  const las=[], los=[];
+  const wrapLon=x=>((x+180)%360+360)%360-180;   // graella a tocar del meridià 180
+  for(let i=0;i<RADAR_FC_N;i++) for(let j=0;j<RADAR_FC_N;j++){
+    las.push((lat0+i*dLat).toFixed(3)); los.push(wrapLon(lon0+j*dLon).toFixed(3));
+  }
+  const q=`https://api.open-meteo.com/v1/forecast?latitude=${las.join(',')}&longitude=${los.join(',')}`
+    + `&hourly=precipitation&timeformat=unixtime`;
+  // demanem només les hores que farem servir (menys dades a baixar amb el mòbil); si el
+  // servidor no accepta aquesta manera de retallar-ho, tornem a demanar-ho per dies
+  let j;
+  try{ j=await outFetch(`${q}&forecast_hours=${RADAR_FC_HOURS+2}&cell_selection=nearest`, 20000); }
+  catch{ j=await outFetch(`${q}&forecast_days=2`, 25000); }
+  const pts=Array.isArray(j)?j:[j];
+  if(pts.length!==RADAR_FC_N*RADAR_FC_N) throw new Error('graella incompleta');
+  const times=pts[0].hourly?.time||[], now=Date.now(), hours=[];
+  times.forEach((ts,h)=>{
+    if(hours.length>=RADAR_FC_HOURS) return;
+    const t=ts*1000;                        // timeformat=unixtime: segons UTC, sense embuts
+    if(!(t>now)) return;                    // l'hora que ja s'està acabant la cobreix el radar
+    hours.push({ time:ts, vals:pts.map(pt=>{
+      const v=pt.hourly?.precipitation?.[h];
+      return (v==null||!isFinite(v)) ? 0 : Math.round(v*10)/10;   // 1 decimal: ocupa menys al cau
+    })});
+  });
+  if(!hours.length) throw new Error('cap hora de previsió');
+  const out={ n:RADAR_FC_N, lat0, lon0, dLat, dLon, hours };
+  cacheSet(ck, out); return out;
+}
+
+function radarFcBand(v){
+  let b=null;
+  for(const x of RADAR_FC_BANDS){ if(v>=x.min) b=x; }
+  return b;
+}
+/* Pinta una hora de la graella en un llenç i el col·loca al mapa. Interpolem el valor
+   (no el color) entre els quatre punts que envolten cada píxel: així les taques queden
+   arrodonides però els llindars de color segueixen sent els de l'escala. */
+function radarFcLayer(g, hour){
+  const n=g.n, px=RADAR_FC_PX, v=hour.vals;
+  const cv=document.createElement('canvas'); cv.width=px; cv.height=px;
+  const ctx=cv.getContext('2d'), img=ctx.createImageData(px,px);
+  for(let y=0;y<px;y++){
+    // el llenç té el nord a dalt i la graella comença pel sud: cal girar-la
+    const gy=(1-(y+0.5)/px)*(n-1), i0=Math.max(0,Math.min(n-2,Math.floor(gy))), fy=gy-i0;
+    for(let x=0;x<px;x++){
+      const gx=((x+0.5)/px)*(n-1), j0=Math.max(0,Math.min(n-2,Math.floor(gx))), fx=gx-j0;
+      const val=(v[i0*n+j0]*(1-fx)+v[i0*n+j0+1]*fx)*(1-fy)
+              + (v[(i0+1)*n+j0]*(1-fx)+v[(i0+1)*n+j0+1]*fx)*fy;
+      const b=radarFcBand(val); if(!b) continue;
+      const k=(y*px+x)*4;
+      img.data[k]=b.c[0]; img.data[k+1]=b.c[1]; img.data[k+2]=b.c[2]; img.data[k+3]=b.a;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  const bounds=[[g.lat0, g.lon0],[g.lat0+(n-1)*g.dLat, g.lon0+(n-1)*g.dLon]];
+  return L.imageOverlay(cv.toDataURL(), bounds, { opacity:0.62, zIndex:2, interactive:false });
+}
+
+/* S'afegeix al final de l'animació quan arriba, sense fer esperar el radar. El comptador
+   'gen' evita que una resposta lenta s'enganxi a un mapa que ja és d'una altra ciutat. */
+async function loadRadarForecast(loc, gen){
+  let g;
+  try{ g=await fetchRadarForecast(loc); }
+  catch{ return; }                   // sense previsió del model, el radar es queda com era
+  if(gen!==radarGen || !radarMap || !radarFrames.length || typeof L==='undefined') return;
+  const now=Date.now();
+  for(const h of g.hours){
+    radarFrames.push({ time:h.time, type:'model', plus:Math.max(1, Math.ceil((h.time*1000-now)/36e5)) });
+    radarLayers.push(radarFcLayer(g,h));
+  }
+  const slider=$('radarSlider'); if(slider) slider.max=radarFrames.length-1;
 }
 
 function toggleRadarPlay(){
@@ -2698,7 +2824,7 @@ function showWelcome(){
     <ul class="welcome-features">
       <li>🔍 <strong>Cerca qualsevol ciutat</strong> — suggeriments en temps real mentre escrius</li>
       <li>📡 <strong>Múltiples models</strong> — consens entre ECMWF, ICON, GFS, AROME i d'altres per a la millor precisió</li>
-      <li>🌧️ <strong>Radar de pluja interactiu</strong> — passat i previsió propera en animació</li>
+      <li>🌧️ <strong>Radar de pluja interactiu</strong> — de les últimes dues hores fins a sis hores endavant, per veure cap on va la tempesta</li>
       <li>⚠️ <strong>Avisos oficials</strong> — alertes de Meteoalarm i AEMET en temps real</li>
       <li>🔗 <strong>Desa i comparteix</strong> — el resum del dia amb un sol toc</li>
       <li>📵 <strong>Mode sense connexió</strong> — mostra l'última dada coneguda si no hi ha xarxa</li>
