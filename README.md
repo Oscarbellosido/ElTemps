@@ -16,14 +16,18 @@ Tot el codi és dins de **`index.html`**. No cal cap servidor, ni compilar res, 
 dependències. Per provar-ho en local només cal obrir el fitxer amb el navegador (doble clic).
 
 ```
-Temps/
+ElTemps/
 ├── index.html      ← l'aplicació sencera (edita aquí)
 ├── manifest.json   ← configuració PWA (instal·lable al mòbil)
-├── sw.js           ← service worker (offline + instal·lació)
+├── sw.js           ← service worker (offline + instal·lació + avisos)
 ├── icon.svg        ← icona de l'app (vectorial)
 ├── icon-192.png    ← icona PWA 192px
 ├── icon-512.png    ← icona PWA 512px (i maskable)
+├── vendor/         ← Leaflet (el mapa del radar), allotjat aquí i no en un CDN
+├── scripts/        ← avisos.js: decideix i envia els avisos al mòbil
+├── .github/        ← les dues tasques automàtiques (vegeu "Avisos al mòbil")
 ├── README.md       ← aquest document
+├── CLAUDE.md       ← guia del repositori per a assistents d'IA
 └── .gitignore
 ```
 
@@ -114,7 +118,7 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 
 ## ✨ Funcions actuals
 
-- [x] **Mode família** 😜 (botó, actiu per defecte): missatge divertit a dalt de tot segons el temps (calor, fred, pluja, tempesta, vent…), amb frases que van rotant
+- [x] **Aniversaris i dies assenyalats**: quan toca, surt una felicitació a dalt de tot
 - [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
@@ -134,6 +138,11 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] **Frescor de dades**: refresc automàtic cada 10 min, "actualitzat fa X min" i número de versió visible
 - [x] Tema clar/fosc + disseny responsive per a mòbil
 - [x] **PWA instal·lable** a Android/escriptori (manifest + service worker + icones PNG): botó "Instal·la l'aplicació", funciona offline (la carcassa) i s'actualitza sola
+- [x] **Mesos vinents**: tendència estacional fins a 7 mesos (CFSv2) comparada amb la normal
+  climàtica 1995-2024, risc d'incendi forestal, risc de crescuda de riu (GloFAS) i El Niño / La Niña
+- [x] **Efectes animats** a la targeta "Ara" (sol, núvols, pluja, neu, tempesta amb llampecs, estrelles)
+- [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta o pluja a punt de caure,
+  encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)
 
 ---
 
@@ -141,7 +150,6 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 
 Coses que es poden incorporar més endavant:
 
-- [ ] **Notificacions** quan es preveu pluja a les pròximes hores (mentre la pestanya és oberta)
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
 - [ ] **Comparació de llocs** (veure dos pobles alhora)
 - [ ] **Idioma anglès** a part del català/castellà
@@ -239,11 +247,14 @@ res prou destacable, o que era fora de la franja horària de la regla.
   Sense això, un nom de lloc amb codi HTML s'executaria al navegador.
 - Les **coordenades del GPS** s'arrodoneixen amb `coarse()` (~100 m) abans d'enviar-les a la
   geocodificació inversa. No cal més precisió i així no surt la posició exacta del dispositiu.
-- ⚠️ **El mode família (`FAMILY`, `BIRTHDAYS`, `EVENTS`) és públic.** Aquest repo és obert i
+- ⚠️ **Les llistes `FAMILY`, `BIRTHDAYS` i `EVENTS` són públiques.** Aquest repo és obert i
   `index.html` es publica sencer: tothom pot llegir el que hi posis. Regla: **només noms de
   pila**. Res de cognoms, adreces, telèfons, anys de naixement ni frases com "a casa d'en …".
   Les coordenades han de ser les del poble, mai les d'una casa. Si algun dia hi vols posar
   dades de debò, s'han de xifrar — no n'hi ha prou d'amagar-les.
+  Compte: que una llista no es vegi a la pantalla no vol dir que no es publiqui. El **mode
+  família** està apagat des de la v1.4.2 i `FAMILY` no surt enlloc, però els noms segueixen
+  sent dins d'`index.html`, a la vista de tothom.
 
 ## 📝 Notes
 
