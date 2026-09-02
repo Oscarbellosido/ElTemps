@@ -97,6 +97,7 @@ Tot ve d'**[Open-Meteo](https://open-meteo.com)** — gratuït i sense clau d'AP
 | Avisos oficials | `feeds.meteoalarm.org` (via proxy Cloudflare `mecai`) |
 | Radar: imatges de radar i extrapolació a 30 min | `api.rainviewer.com/public/weather-maps.json` |
 | Radar: pluja prevista a hores vista | `api.open-meteo.com/v1/forecast` amb una graella de 15×15 punts |
+| Clima des del 1940 (reanàlisi ERA5) | `archive-api.open-meteo.com/v1/archive` |
 
 **Radar més enllà de mitja hora:** RainViewer només extrapola les imatges del radar 30
 minuts. Per allargar l'animació unes hores es demana a Open-Meteo la pluja horària d'una
@@ -104,6 +105,14 @@ graella de 15×15 punts (~33 km entre punts) al voltant de la ubicació i es pin
 interpolada, amb l'escala de color de la llegenda. No és radar: és la previsió d'un model,
 més gruixuda i menys fiable com més lluny va, i per això surt marcada a part (◈). Es guarda
 20 minuts al navegador i, si falla, el radar segueix funcionant igual.
+
+**Clima des del 1940:** la targeta "Clima des del 1940" baixa, un sol cop per població, la
+temperatura mitjana i la pluja de cada dia des del 1940 (reanàlisi ERA5 de l'ECMWF, uns 600 KB)
+i en guarda al navegador el resum per mesos. Té tres vistes: l'any en curs mes a mes comparat
+amb la normal 1995-2024; la tendència any a any des del 1940 (temperatura amb la mitjana d'11
+anys, pluja anual amb la ratlla de la normal); i un mes concret a través de tots els anys, amb
+els rècords. Són dades reals, no una predicció: la temperatura és molt fiable; la pluja d'un
+punt concret pot quedar suavitzada perquè la reanàlisi treballa amb caselles d'uns 25 km.
 
 **Avisos oficials:** es llegeix el feed de Meteoalarm del país i es filtra per província
 (camp `admin2` d'Open-Meteo), mostrant només avisos de nivell **groc o superior** vigents
@@ -140,6 +149,8 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] **PWA instal·lable** a Android/escriptori (manifest + service worker + icones PNG): botó "Instal·la l'aplicació", funciona offline (la carcassa) i s'actualitza sola
 - [x] **Mesos vinents**: tendència estacional fins a 7 mesos (CFSv2) comparada amb la normal
   climàtica 1995-2024, risc d'incendi forestal, risc de crescuda de riu (GloFAS) i El Niño / La Niña
+- [x] **Clima des del 1940**: enguany mes a mes contra la normal, tendència any a any des del 1940 i
+  un mes concret a través dels anys (rècords de calor, fred, pluja i sequera), amb dades reals ERA5
 - [x] **Efectes animats** a la targeta "Ara" (sol, núvols, pluja, neu, tempesta amb llampecs, estrelles)
 - [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta o pluja a punt de caure,
   encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)

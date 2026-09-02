@@ -28,7 +28,7 @@ o des de l'editor web de GitHub.
 
 ```
 ElTemps/
-├── index.html               ← TOTA l'aplicació (~3.300 línies: <style> + HTML + <script>)
+├── index.html               ← TOTA l'aplicació (~3.600 línies: <style> + HTML + <script>)
 ├── sw.js                    ← service worker: offline, instal·lació i notificacions push
 ├── manifest.json            ← manifest PWA (icones, nom, dreceres a 4 ciutats)
 ├── icon.svg / icon-192.png / icon-512.png
@@ -69,8 +69,9 @@ Blocs principals del `<script>` (l'ordre a dins del fitxer):
 | `loadWeather()` | **punt d'entrada de tota càrrega de dades** |
 | Avisos oficials | Meteoalarm via proxy Cloudflare |
 | `render()` | compon tot el resultat concatenant els `renderXxx()` |
-| Targetes | resum del dia, ara, horària, diària, mar i muntanya, aire, radar, consens, mesos vinents |
+| Targetes | resum del dia, ara, horària, diària, mar i muntanya, aire, radar, consens, clima des del 1940, mesos vinents |
 | Mesos vinents | estacional CFSv2, normal climàtica ERA5, risc d'incendi, crescudes GloFAS, El Niño |
+| Clima des del 1940 | històric ERA5 agregat per mesos; tres vistes (`histView`): enguany, tendència, un mes |
 | Radar | RainViewer + Leaflet + previsió de pluja del model a hores vista |
 | Init | arrencada, paràmetres `?lat=&lon=&name=`, modal de benvinguda |
 | Mode família | **actualment desactivat** (`funOn()` retorna sempre `false`) |
@@ -82,6 +83,7 @@ loadWeather(loc)
   └─ Promise.allSettled([fetchForecast, fetchModels, fetchAir, fetchMarine])
        └─ render(loc, fc, models, air, marine)      ← repinta #result SENCER
             ├─ scheduleRadar(loc)      ← IntersectionObserver: carrega Leaflet quan es veu
+            ├─ scheduleHist(loc)       ← IntersectionObserver: ~600 KB el primer cop, després cache
             ├─ scheduleOutlook(loc)    ← IntersectionObserver: ~350 KB, carrega quan es veu
             └─ loadAlerts(loc, gen)    ← asíncron, no bloqueja
 ```
@@ -89,8 +91,8 @@ loadWeather(loc)
 Punts clau d'aquest flux:
 
 - **`render()` reescriu `#result` sencer.** Qualsevol estat viu (mapa del radar, observers,
-  timers, canvas) s'ha de reinicialitzar a cada render; per això `scheduleRadar` i
-  `scheduleOutlook` es tornen a cridar sempre.
+  timers, canvas) s'ha de reinicialitzar a cada render; per això `scheduleRadar`,
+  `scheduleHist` i `scheduleOutlook` es tornen a cridar sempre.
 - **Comptador de generació.** `loadGen` (i `radarGen`) evita que una resposta lenta d'una
   ciutat s'enganxi a la pantalla d'una altra: després de cada `await` es comprova
   `if(gen!==loadGen) return;`. **Mantingues aquest patró** a qualsevol fetch nou.
@@ -202,7 +204,8 @@ Tot d'**Open-Meteo** (gratuït, sense clau), més RainViewer per al radar:
 | Mar (onatge, temperatura) | `marine-api.open-meteo.com/v1/marine` |
 | Cerca de poblacions | `geocoding-api.open-meteo.com/v1/search` (ca + es en paral·lel) |
 | Tendència estacional (CFSv2) | `seasonal-api.open-meteo.com/v1/seasonal` |
-| Normal climàtica 1995-2024 (ERA5) | API d'arxiu d'Open-Meteo |
+| Normal climàtica 1995-2024 (ERA5) | `archive-api.open-meteo.com/v1/archive` |
+| Clima des del 1940 (ERA5, diari → mesos) | mateix endpoint, `temperature_2m_mean` + `precipitation_sum`, `timeformat=unixtime` |
 | Cabal de rius (GloFAS) | API d'inundacions d'Open-Meteo |
 | Radar | `api.rainviewer.com/public/weather-maps.json` + tiles |
 | Avisos oficials i índex ONI | `feeds.meteoalarm.org` / CPC, **via proxy Cloudflare** |
@@ -211,11 +214,17 @@ El **proxy Cloudflare** (`WORKER_URL` = `https://mecai.oscarbellosido.workers.de
 necessari perquè Meteoalarm i el CPC bloquegen el CORS. El worker es comparteix amb un
 altre projecte del propietari (Noticies) i **el seu codi no és en aquest repositori**.
 
-Els blocs cars (mesos vinents, previsió del radar) es guarden a `localStorage` amb TTL
-(`OUT_TTL`, `cacheGet`/`cacheSet`). Claus de `localStorage` en ús: `eltemps_recent`,
-`eltemps_fav`, `eltemps_theme`, `eltemps_fun`, `eltemps_offline_v1`, `eltemps_welcomed`,
-`eltemps_notif`, i les de cache `eltemps_seas_*`, `eltemps_normals_*`, `eltemps_river*`,
-`eltemps_enso`, `eltemps_radarfc_*`.
+Els blocs cars (mesos vinents, clima des del 1940, previsió del radar) es guarden a
+`localStorage` amb TTL (`OUT_TTL`, `HIST_TTL`, `cacheGet`/`cacheSet`). Claus de `localStorage`
+en ús: `eltemps_recent`, `eltemps_fav`, `eltemps_theme`, `eltemps_fun`, `eltemps_offline_v1`,
+`eltemps_welcomed`, `eltemps_notif`, i les de cache `eltemps_seas_*`, `eltemps_normals_*`,
+`eltemps_river*`, `eltemps_enso`, `eltemps_radarfc_*`, `eltemps_hist_*` (anys tancats, 6 mesos;
+la clau porta l'últim any complet) i `eltemps_histcur_*` (any en curs, 12 h).
+
+**L'històric des del 1940 no es guarda en brut**: la resposta diària (~31.000 files) s'agrega
+a `[temperatura mitjana, pluja, dies]` per mes (`packHist`) i només es desa això (~10 KB).
+La normal que fa servir aquesta targeta (`histNormals`) es calcula amb `NORM_Y0`-`NORM_Y1`
+sobre les mateixes dades, per ser comparable amb la de "Mesos vinents".
 
 ---
 

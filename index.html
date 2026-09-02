@@ -358,6 +358,24 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   .out-bar .txt { font-size:.6rem; }
 }
 
+/* ── Clima des del 1940 (històric ERA5) ─────────────────────────────────────── */
+.hist-tabs { display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:.9rem; }
+.hist-tab { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); font-size:.76rem; font-weight:600; padding:.38rem .8rem; border-radius:20px; cursor:pointer; transition:all .15s; font-family:inherit; }
+.hist-tab:hover { border-color:var(--accent); color:var(--text-primary); }
+.hist-tab.on { background:var(--accent); border-color:var(--accent); color:var(--bg-primary); }
+.hist-chips { display:flex; gap:.3rem; flex-wrap:wrap; margin-bottom:.6rem; }
+.hist-chips .chip { padding:.25rem .55rem; font-size:.72rem; }
+.hist-chips .chip.on { background:var(--accent); border-color:var(--accent); color:var(--bg-primary); }
+.hist-chart { width:100%; height:auto; display:block; overflow:visible; }
+.hist-chart .grid-line { stroke:var(--border); stroke-width:1; }
+.hist-chart .axis-lbl { fill:var(--text-secondary); font-size:10px; }
+.hist-chart .hist-smooth { fill:none; stroke:var(--text-primary); stroke-width:2; stroke-linejoin:round; opacity:.85; }
+.hist-chart .hist-ref { stroke:var(--text-primary); stroke-width:1.5; stroke-dasharray:4 3; opacity:.7; }
+.hist-chart.narrow .axis-lbl { font-size:12px; }
+.hist-facts { display:grid; gap:.35rem; margin-top:.85rem; font-size:.76rem; line-height:1.55; color:var(--text-secondary); }
+.hist-facts div { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:.5rem .7rem; }
+.hist-facts b { color:var(--text-primary); font-weight:700; }
+
 /* ── Misc ───────────────────────────────────────────────────────────────────── */
 #result { display:none; }
 #result.show { display:block; animation:fadeSlide .35s ease-out; }
@@ -507,8 +525,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.6.0';
-const BUILD_DATE  = '2026-08-24';
+const APP_VERSION = '1.7.0';
+const BUILD_DATE  = '2026-09-02';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1294,12 +1312,14 @@ function render(loc, fc, models, air, marine){
     renderAir(air),
     renderRadar(),
     renderConsensus(models),
+    renderHist(),
     renderOutlook(),
   ].filter(Boolean).join('');
   $('result').innerHTML = html;
   if(funOn()) autoPlayFun();
   if(models) wireConsensus(models);
   scheduleRadar(loc);
+  scheduleHist(loc);
   scheduleOutlook(loc);
   try{ setWeatherFx(fc.current.weather_code, fc.current.is_day===1); }catch{}
 }
@@ -2490,6 +2510,344 @@ function fillOutlook(loc, seas, nor, recent, shifted, enso, riv){
     ${dist!=null && dist>=3 ? `El model estacional treballa amb caselles grans: les dades de tendència són del punt de graella més proper, a ${Math.round(dist)} km d'aquí. ` : ''}
     Les anomalies es calculen contra la normal del mateix punt, sense corregir el biaix propi del model.
     Recorda que la fiabilitat a mesos vista és baixa: serveix per fer-se una idea, no per fer plans.</div>`;
+}
+
+/* ── Clima des del 1940: enguany vs. normal, tendència anual i un mes any a any ── */
+/* Al contrari de "Mesos vinents", això NO és una predicció: és el que ha passat de debò,
+   segons la reanàlisi ERA5 (ECMWF), que reconstrueix el temps de tot el món dia a dia des
+   del 1940. Té el biaix de qualsevol reanàlisi (caselles de ~25 km, la pluja local pot
+   quedar suavitzada), però és l'única font gratuïta i homogènia per a 86 anys seguits.
+   Es carrega tard (quan la targeta entra en pantalla) perquè són ~600 KB de dades, i
+   només un cop: el resultat agregat per mesos (~15 KB) es guarda al navegador. */
+const HIST_Y0 = 1940;                   // primer any d'ERA5
+const HIST_TTL = { past: 180*864e5, cur: 12*36e5 };   // anys tancats: 6 mesos · any en curs: 12 h
+let histObserver=null, histBusy=false, histData=null, histView='year', histMonth=null;
+
+/* Agrega la resposta diària d'Open-Meteo a mesos: per cada any, 12 caselles amb
+   temperatura mitjana, pluja acumulada i nombre de dies amb dada. */
+function aggregateHist(j, into){
+  const d=j?.daily; const out=into||{};
+  if(!d?.time?.length) return out;
+  const unix = typeof d.time[0]==='number';
+  for(let i=0;i<d.time.length;i++){
+    const tv=d.temperature_2m_mean?.[i], pv=d.precipitation_sum?.[i];
+    if(tv==null && pv==null) continue;
+    let y, m;
+    if(unix){ const dt=new Date(d.time[i]*1000); y=dt.getUTCFullYear(); m=dt.getUTCMonth(); }
+    else { y=+d.time[i].slice(0,4); m=+d.time[i].slice(5,7)-1; }
+    let yr=out[y]; if(!yr){ yr=[]; for(let k=0;k<12;k++) yr.push({ tS:0, tN:0, p:0, pN:0 }); out[y]=yr; }
+    const c=yr[m];
+    if(tv!=null){ c.tS+=tv; c.tN++; }
+    if(pv!=null){ c.p+=pv; c.pN++; }
+  }
+  return out;
+}
+/* Compacta el que es desa: [t mitjana, pluja, dies] per mes, arrodonit. */
+function packHist(agg){
+  const o={};
+  for(const y of Object.keys(agg)){
+    o[y]=agg[y].map(c=>[ c.tN?Math.round(c.tS/c.tN*100)/100:null, c.pN?Math.round(c.p*10)/10:null, Math.max(c.tN,c.pN) ]);
+  }
+  return o;
+}
+function histFetchUrl(lat, lon, from, to){
+  return `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}`
+    + `&start_date=${from}&end_date=${to}&daily=temperature_2m_mean,precipitation_sum`
+    + `&timezone=GMT&timeformat=unixtime`;
+}
+function isoDaysAgo(n){ const d=new Date(Date.now()-n*864e5); return d.toISOString().slice(0,10); }
+/* Dues baixades: els anys tancats (grossa, un cop cada mig any) i l'any en curs (petita, sovint). */
+async function fetchHist(loc){
+  const lat=loc.lat.toFixed(2), lon=loc.lon.toFixed(2);
+  const now=new Date(), Y=now.getUTCFullYear();
+  const lastFull=Y-1;
+  const ckPast=`eltemps_hist_${lat},${lon}_${lastFull}`;
+  let past=cacheGet(ckPast, HIST_TTL.past);
+  let grid=null;
+  if(!past){
+    // En canviar d'any la clau canvia: s'esborra la de l'any anterior perquè no s'acumulin
+    try{ for(const k of Object.keys(localStorage)) if(k.startsWith(`eltemps_hist_${lat},${lon}_`) && k!==ckPast) localStorage.removeItem(k); }catch{}
+    const j=await outFetch(histFetchUrl(loc.lat, loc.lon, `${HIST_Y0}-01-01`, `${lastFull}-12-31`), 60000);
+    grid={ lat:j.latitude, lon:j.longitude };
+    past={ y:packHist(aggregateHist(j)), grid };
+    if(!Object.keys(past.y).length) throw new Error('històric buit');
+    cacheSet(ckPast, past);
+  }
+  const ckCur=`eltemps_histcur_${lat},${lon}`;
+  let cur=cacheGet(ckCur, HIST_TTL.cur);
+  if(!cur){
+    // ERA5 va uns 5 dies endarrerit: es demana fins ahir i els dies que encara no hi són
+    // arriben com a null (l'agregació els ignora). Si el servidor rebutgés la data, es
+    // torna a provar retallant una setmana.
+    let j=null;
+    try{ j=await outFetch(histFetchUrl(loc.lat, loc.lon, `${Y}-01-01`, isoDaysAgo(1)), 20000); }
+    catch{ try{ j=await outFetch(histFetchUrl(loc.lat, loc.lon, `${Y}-01-01`, isoDaysAgo(8)), 20000); }catch{} }
+    cur={ y: j ? packHist(aggregateHist(j)) : {}, upto: null };
+    if(j?.daily?.time){
+      const t=j.daily.temperature_2m_mean||[]; let last=-1;
+      for(let i=t.length-1;i>=0;i--){ if(t[i]!=null){ last=i; break; } }
+      if(last>=0){ const tt=j.daily.time[last]; cur.upto = typeof tt==='number' ? new Date(tt*1000).toISOString().slice(0,10) : tt; }
+    }
+    cacheSet(ckCur, cur);
+  }
+  return { years: Object.assign({}, past.y, cur.y), grid: past.grid||grid, upto: cur.upto, curYear: Y };
+}
+
+/* Normal mensual 1995-2024 (mateix període que "Mesos vinents") a partir de les mateixes dades,
+   així els dos càlculs es poden comparar entre ells. */
+function histNormals(years){
+  const t=[], p=[], tsd=[], psd=[];
+  for(let m=0;m<12;m++){
+    const tv=[], pv=[];
+    for(let y=NORM_Y0;y<=NORM_Y1;y++){
+      const c=years[y]?.[m]; if(!c || c[2]<25) continue;
+      if(c[0]!=null) tv.push(c[0]);
+      if(c[1]!=null) pv.push(c[1]);
+    }
+    t[m]=tv.length?tv.reduce((a,b)=>a+b,0)/tv.length:null;
+    p[m]=pv.length?pv.reduce((a,b)=>a+b,0)/pv.length:null;
+    tsd[m]=sdev(tv); psd[m]=sdev(pv);
+  }
+  return { t, p, tsd, psd };
+}
+/* Any sencer: mitjana de temperatura (ponderada pels dies) i pluja total. Només anys complets. */
+function histYearRows(years){
+  const rows=[];
+  for(const y of Object.keys(years).map(Number).sort((a,b)=>a-b)){
+    const ms=years[y]; let tS=0, tN=0, p=0, days=0;
+    for(const c of ms){ if(!c) continue; if(c[0]!=null){ tS+=c[0]*c[2]; tN+=c[2]; } if(c[1]!=null) p+=c[1]; days+=c[2]; }
+    if(days<350) continue;               // any incomplet (l'actual, o amb forats)
+    rows.push({ y, t:tN?tS/tN:null, p });
+  }
+  return rows;
+}
+/* Ordinal en català: 1r, 2n, 3r, 4t i a partir d'aquí -è */
+function ordCa(n){ return n + ({1:'r',2:'n',3:'r',4:'t'}[n] || 'è'); }
+function histMean(a){ const v=a.filter(x=>x!=null); return v.length?v.reduce((x,y)=>x+y,0)/v.length:null; }
+
+/* Targeta i càrrega tardana */
+function renderHist(){
+  return `<div class="card" id="histCard">
+    <h2><span class="ic">📜</span> Clima des del ${HIST_Y0} <span style="color:var(--text-secondary);font-size:.7rem;font-weight:400">· temperatures i pluges reals</span></h2>
+    <div id="histBody"><div class="out-skel">Desplaça fins aquí per carregar l'històric…</div></div>
+  </div>`;
+}
+function scheduleHist(loc){
+  if(histObserver){ histObserver.disconnect(); histObserver=null; }
+  histBusy=false; histData=null;
+  const el=$('histBody'); if(!el) return;
+  const gen=loadGen;
+  if(!('IntersectionObserver' in window)){ loadHist(loc, gen); return; }
+  histObserver=new IntersectionObserver((entries,obs)=>{
+    if(entries.some(e=>e.isIntersecting)){
+      obs.disconnect(); histObserver=null;
+      loadHist(loc, gen);
+    }
+  },{ rootMargin:'250px' });
+  histObserver.observe(el);
+}
+async function loadHist(loc, gen){
+  if(histBusy) return; histBusy=true;
+  const body=$('histBody'); if(!body) return;
+  body.innerHTML=`<div class="out-skel"><span class="spinner"></span>Carregant ${new Date().getUTCFullYear()-HIST_Y0} anys de dades (només el primer cop triga)…</div>`;
+  let data=null;
+  try{ data=await fetchHist(loc); }catch{}
+  if(gen!==loadGen) return;
+  if(!data || !Object.keys(data.years).length){
+    body.innerHTML=`<div class="out-skel">No s'ha pogut carregar l'històric
+      (${offlineMode?'estàs sense connexió':'la font no respon'}). Torna-ho a provar més tard.</div>`;
+    return;
+  }
+  data.nor=histNormals(data.years);
+  data.loc=loc;
+  histData=data;
+  if(histMonth==null) histMonth=new Date().getMonth();
+  paintHist();
+}
+function setHistView(v){ histView=v; paintHist(); }
+function setHistMonth(m){ histMonth=m; histView='month'; paintHist(); }
+function paintHist(){
+  const body=$('histBody'), d=histData; if(!body||!d) return;
+  const tabs=[['year','Enguany'],['trend',`Des del ${HIST_Y0}`],['month','Un mes, any a any']];
+  const nav=`<div class="hist-tabs" role="tablist">${tabs.map(([k,l])=>
+    `<button class="hist-tab${histView===k?' on':''}" role="tab" aria-selected="${histView===k}" onclick="setHistView('${k}')">${l}</button>`).join('')}</div>`;
+  let inner='';
+  try{
+    inner = histView==='year' ? histViewYear(d) : histView==='trend' ? histViewTrend(d) : histViewMonth(d);
+  }catch(e){ console.error('hist', e); inner=`<div class="out-skel">No s'ha pogut dibuixar aquesta vista.</div>`; }
+  const dist = d.grid ? kmBetween(d.loc.lat, d.loc.lon, d.grid.lat, d.grid.lon) : null;
+  body.innerHTML = nav + inner + `<div class="card-note">Font: reanàlisi <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener">ERA5 (ECMWF)</a>
+    via Open-Meteo, des del ${HIST_Y0}${d.upto?` fins al ${d.upto.slice(8,10)}/${d.upto.slice(5,7)}/${d.upto.slice(0,4)}`:''}.
+    ${dist!=null && dist>=3 ? `Són dades de la casella de graella més propera, a ${Math.round(dist)} km d'aquí. ` : ''}
+    Una reanàlisi reconstrueix el temps passat amb un model i totes les observacions disponibles: la temperatura
+    és molt fiable; la pluja d'un lloc concret pot quedar suavitzada (les tempestes locals es reparteixen per la casella).
+    La normal és la mitjana ${NORM_Y0}-${NORM_Y1} del mateix punt.</div>`;
+}
+
+/* Vista 1: enguany, mes a mes, contra la normal */
+function histViewYear(d){
+  const Y=d.curYear, cur=d.years[Y]||[], prev=d.years[Y-1]||[], nor=d.nor;
+  // Si l'any acaba de començar i encara no hi ha cap mes amb dades, s'ensenya l'any passat sencer.
+  const hasCur = cur.some(c=>c && c[2]>=7);
+  const yr = hasCur ? Y : Y-1, ms = hasCur ? cur : prev;
+  if(!ms.some(c=>c && c[2]>=7)) return `<div class="out-skel">Encara no hi ha dades d'aquest any.</div>`;
+  let trs='', tAn=[], pRat=[];
+  for(let m=0;m<12;m++){
+    const c=ms[m]; if(!c || c[2]<7) continue;
+    const partial = c[2] < 25;
+    const an = (c[0]!=null && nor.t[m]!=null) ? c[0]-nor.t[m] : null;
+    // La pluja d'un mes a mitges es compara amb la part proporcional de la normal
+    const pn = nor.p[m]!=null ? nor.p[m]*(partial ? c[2]/30 : 1) : null;
+    const ratio = (c[1]!=null && pn) ? c[1]/pn : null;
+    if(an!=null && !partial) tAn.push(an);
+    if(ratio!=null && !partial) pRat.push(ratio);
+    const [tc,tcol]= an!=null ? tempCat(an, nor.tsd[m]) : ['—','var(--text-secondary)'];
+    const half=an!=null?Math.min(50, Math.abs(an)/4*50):0, tl=an>=0?50:50-half, sign=an>=0?'+':'−';
+    const [pc,pcol]= ratio!=null ? precipCat(ratio) : ['—','var(--text-secondary)'];
+    const pp=ratio!=null?Math.min(100, ratio*50):null, pl=pp!=null?Math.min(pp,50):0, pr=pp!=null?Math.max(pp,50):0;
+    trs += `<div class="out-month" style="cursor:default">
+      <div class="omn">${MONTHS[m]}<small>${yr}${partial?` · ${c[2]} d`:''}</small></div>
+      <div class="out-bar">
+        ${an!=null?`<span class="fill" style="left:${tl}%;width:${half}%;background:${tcol}"></span>`:''}<span class="mid"></span>
+        <span class="txt"><span>${an!=null?`${r1(c[0])}° · ${sign}${r1(Math.abs(an))}°<br><span style="font-weight:500;opacity:.8">${tc}</span>`:'—'}</span></span>
+      </div>
+      <div class="out-bar">
+        ${ratio!=null?`<span class="fill" style="left:${pl}%;width:${pr-pl}%;background:${pcol}"></span>`:''}<span class="mid"></span>
+        <span class="txt"><span>${ratio!=null?`${Math.round(c[1])} mm · ${Math.round(ratio*100)}%<br><span style="font-weight:500;opacity:.8">${pc}</span>`:'—'}</span></span>
+      </div>
+    </div>`;
+  }
+  const ta=histMean(tAn), pr=histMean(pRat);
+  let frase='';
+  if(ta!=null){
+    frase = `Fins ara, ${yr} va <strong>${ta>=0.3?`${r1(ta)}° per damunt`:ta<=-0.3?`${r1(Math.abs(ta))}° per sota`:'a prop'} de la normal</strong>`
+      + (pr!=null ? ` i ha plogut <strong>${pr<0.8?'menys':pr>1.25?'més':'com'} del normal</strong> (${Math.round(pr*100)}% de la pluja habitual)` : '') + '.';
+  }
+  return `<div class="out-sub">📅 ${yr}, mes a mes, comparat amb la normal ${NORM_Y0}-${NORM_Y1}</div>
+    <div class="out-head"><div>Mes</div><div>Temperatura</div><div>Pluja</div></div>${trs}
+    <div class="spread-note">${frase} A cada mes: la mitjana del mes i la diferència amb la normal; la pluja
+    caiguda i el percentatge sobre la normal. La barra va cap a la dreta si fa més calor o plou més del normal.</div>`;
+}
+
+/* Vista 2: tendència any a any des del 1940 (temperatura mitjana anual i pluja anual) */
+function histViewTrend(d){
+  const rows=histYearRows(d.years); if(rows.length<10) return `<div class="out-skel">No hi ha prou anys complets.</div>`;
+  const ref=rows.filter(r=>r.y>=NORM_Y0 && r.y<=NORM_Y1);
+  const tRef=histMean(ref.map(r=>r.t)), pRef=histMean(ref.map(r=>r.p));
+  // Al mòbil el viewBox és més estret: 86 barres en 720 px escalades a 320 px es veurien
+  // com un fil; amb 380 px el gràfic queda més alt i les etiquetes es llegeixen.
+  const narrow=(window.innerWidth||1024)<560, every=narrow?20:10;
+  const n=rows.length, W=narrow?380:720, padL=narrow?30:34, padR=8;
+  const innerW=W-padL-padR, bw=innerW/n;
+  const x=k=>padL+k*bw;
+  // Temperatura: barres d'anomalia respecte a la normal, vermell a sobre i blau a sota
+  const Ht=170, tTop=18, tBot=24, tInner=Ht-tTop-tBot;
+  const an=rows.map(r=>r.t!=null&&tRef!=null?r.t-tRef:null);
+  const aMax=Math.max(0.5, ...an.filter(v=>v!=null).map(Math.abs));
+  const y0=tTop+tInner/2, sc=(tInner/2)/aMax;
+  let tb='';
+  rows.forEach((r,k)=>{ const a=an[k]; if(a==null) return;
+    const h=Math.abs(a)*sc; const y=a>=0?y0-h:y0;
+    const cur = r.y===d.curYear-1;
+    tb+=`<rect x="${x(k).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1,bw-1).toFixed(1)}" height="${Math.max(0.5,h).toFixed(1)}" fill="${a>=0?'var(--bad)':'var(--cold)'}" opacity="${cur?1:.75}"><title>${r.y}: ${r1(r.t)}°C (${a>=0?'+':'−'}${r1(Math.abs(a))}°)</title></rect>`;
+  });
+  // Mitjana mòbil d'11 anys, per veure la tendència sense el soroll any a any
+  const sm=rows.map((r,k)=>{ const w=an.slice(Math.max(0,k-5),k+6).filter(v=>v!=null); return w.length>=6?histMean(w):null; });
+  const smPts=sm.map((v,k)=>v==null?null:`${(x(k)+bw/2).toFixed(1)},${(y0-v*sc).toFixed(1)}`).filter(Boolean).join(' ');
+  // Eix d'anys (cada 10 en ample, cada 20 en estret)
+  let ax='';
+  rows.forEach((r,k)=>{ if(r.y%every===0) ax+=`<text class="axis-lbl" x="${(x(k)+bw/2).toFixed(1)}" y="${Ht-8}" text-anchor="middle">${r.y}</text>`; });
+  const gridT=[aMax, aMax/2, 0, -aMax/2, -aMax].map(v=>`<line class="grid-line" x1="${padL}" x2="${W-padR}" y1="${(y0-v*sc).toFixed(1)}" y2="${(y0-v*sc).toFixed(1)}"${v===0?' style="opacity:.9"':''}/>`
+    + `<text class="axis-lbl" x="${padL-4}" y="${(y0-v*sc+3).toFixed(1)}" text-anchor="end">${v>0?'+':''}${r1(v)}°</text>`).join('');
+  const tsvg=`<svg class="hist-chart${narrow?' narrow':''}" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Anomalia de temperatura anual des del ${HIST_Y0}">
+    ${gridT}${tb}<polyline class="hist-smooth" points="${smPts}"/>${ax}</svg>`;
+  // Pluja: barres de mm anuals, amb la línia de la normal
+  const Hp=150, pTop=14, pBot=24, pInner=Hp-pTop-pBot;
+  const pMax=Math.max(1, ...rows.map(r=>r.p));
+  const py=v=>pTop+pInner-(v/pMax)*pInner;
+  let pb='';
+  rows.forEach((r,k)=>{ const h=(r.p/pMax)*pInner;
+    const col = pRef ? (r.p>=pRef*1.25?'var(--accent)':r.p<=pRef*0.75?'var(--warm)':'var(--text-secondary)') : 'var(--accent)';
+    pb+=`<rect x="${x(k).toFixed(1)}" y="${py(r.p).toFixed(1)}" width="${Math.max(1,bw-1).toFixed(1)}" height="${h.toFixed(1)}" fill="${col}" opacity=".7"><title>${r.y}: ${Math.round(r.p)} mm</title></rect>`; });
+  const gridP=[pMax, pMax/2].map(v=>`<line class="grid-line" x1="${padL}" x2="${W-padR}" y1="${py(v).toFixed(1)}" y2="${py(v).toFixed(1)}"/>`
+    + `<text class="axis-lbl" x="${padL-4}" y="${(py(v)+3).toFixed(1)}" text-anchor="end">${Math.round(v)}</text>`).join('');
+  let axp=''; rows.forEach((r,k)=>{ if(r.y%every===0) axp+=`<text class="axis-lbl" x="${(x(k)+bw/2).toFixed(1)}" y="${Hp-8}" text-anchor="middle">${r.y}</text>`; });
+  const psvg=`<svg class="hist-chart${narrow?' narrow':''}" viewBox="0 0 ${W} ${Hp}" role="img" aria-label="Pluja anual des del ${HIST_Y0}">
+    ${gridP}${pb}${pRef?`<line class="hist-ref" x1="${padL}" x2="${W-padR}" y1="${py(pRef).toFixed(1)}" y2="${py(pRef).toFixed(1)}"/>`:''}${axp}</svg>`;
+  // Rànquings i frase resum
+  const byT=rows.filter(r=>r.t!=null).slice().sort((a,b)=>b.t-a.t), byP=rows.slice().sort((a,b)=>b.p-a.p);
+  const last=rows[rows.length-1], lastRank=byT.findIndex(r=>r.y===last.y)+1;
+  const first10=histMean(rows.slice(0,10).map(r=>r.t)), last10=histMean(rows.slice(-10).map(r=>r.t));
+  const warmest5=byT.slice(0,5).map(r=>r.y), recentInTop=warmest5.filter(y=>y>=2000).length;
+  const facts=[];
+  if(first10!=null && last10!=null) facts.push(`Els últims 10 anys han estat de mitjana <b>${r1(last10-first10)}° més càlids</b> que els 10 primers (${rows[0].y}-${rows[9].y}).`);
+  if(byT.length) facts.push(`Any més càlid: <b>${byT[0].y}</b> (${r1(byT[0].t)}°) · més fred: <b>${byT[byT.length-1].y}</b> (${r1(byT[byT.length-1].t)}°)${recentInTop?` · ${recentInTop} dels 5 anys més càlids són d'aquest segle`:''}.`);
+  if(last.t!=null) facts.push(`${last.y} va ser el <b>${ordCa(lastRank)} any més càlid</b> de ${byT.length}${lastRank===1?' — el que més':''}.`);
+  if(byP.length) facts.push(`Any més plujós: <b>${byP[0].y}</b> (${Math.round(byP[0].p)} mm) · més sec: <b>${byP[byP.length-1].y}</b> (${Math.round(byP[byP.length-1].p)} mm) · normal ${Math.round(pRef)} mm.`);
+  return `<div class="out-sub">🌡️ Temperatura mitjana anual · diferència amb la normal ${NORM_Y0}-${NORM_Y1} (${r1(tRef)}°)</div>${tsvg}
+    <div class="spread-note">Cada barra és un any: vermell si va ser més càlid que la normal, blau si més fred.
+    La línia és la mitjana d'11 anys, que és la que ensenya la tendència.</div>
+    <div class="out-sub">🌧️ Pluja anual (mm)</div>${psvg}
+    <div class="spread-note">La ratlla és la pluja normal (${Math.round(pRef)} mm l'any). Blau: any plujós (un 25% o més per sobre);
+    taronja: any sec (un 25% o més per sota).</div>
+    <div class="hist-facts">${facts.map(f=>`<div>${f}</div>`).join('')}</div>`;
+}
+
+/* Vista 3: un mes concret, any a any */
+function histViewMonth(d){
+  const m=histMonth, nor=d.nor;
+  const chips=MONTHS.map((n,i)=>`<span class="chip${i===m?' on':''}" onclick="setHistMonth(${i})">${n}</span>`).join('');
+  const rows=[];
+  for(const y of Object.keys(d.years).map(Number).sort((a,b)=>a-b)){
+    const c=d.years[y]?.[m]; if(!c || c[2]<25) continue;
+    rows.push({ y, t:c[0], p:c[1] });
+  }
+  const now=new Date(), curPartial=d.years[d.curYear]?.[m], showPartial = curPartial && curPartial[2]>=7 && curPartial[2]<25;
+  if(rows.length<10) return `<div class="hist-chips">${chips}</div><div class="out-skel">No hi ha prou anys amb dades d'aquest mes.</div>`;
+  const tRef=nor.t[m], pRef=nor.p[m];
+  const narrow=(window.innerWidth||1024)<560, every=narrow?20:10;
+  const n=rows.length, W=narrow?380:720, padL=narrow?30:34, padR=8, innerW=W-padL-padR, bw=innerW/n, x=k=>padL+k*bw;
+  // Temperatura: anomalia del mes
+  const Ht=170, tTop=18, tBot=24, tInner=Ht-tTop-tBot;
+  const an=rows.map(r=>r.t!=null&&tRef!=null?r.t-tRef:null);
+  const aMax=Math.max(1, ...an.filter(v=>v!=null).map(Math.abs));
+  const y0=tTop+tInner/2, sc=(tInner/2)/aMax;
+  let tb='';
+  rows.forEach((r,k)=>{ const a=an[k]; if(a==null) return; const h=Math.abs(a)*sc;
+    tb+=`<rect x="${x(k).toFixed(1)}" y="${(a>=0?y0-h:y0).toFixed(1)}" width="${Math.max(1,bw-1).toFixed(1)}" height="${Math.max(0.5,h).toFixed(1)}" fill="${a>=0?'var(--bad)':'var(--cold)'}" opacity=".75"><title>${MONTHS[m]} ${r.y}: ${r1(r.t)}°C (${a>=0?'+':'−'}${r1(Math.abs(a))}°)</title></rect>`; });
+  const sm=rows.map((r,k)=>{ const w=an.slice(Math.max(0,k-5),k+6).filter(v=>v!=null); return w.length>=6?histMean(w):null; });
+  const smPts=sm.map((v,k)=>v==null?null:`${(x(k)+bw/2).toFixed(1)},${(y0-v*sc).toFixed(1)}`).filter(Boolean).join(' ');
+  let ax=''; rows.forEach((r,k)=>{ if(r.y%every===0) ax+=`<text class="axis-lbl" x="${(x(k)+bw/2).toFixed(1)}" y="${Ht-8}" text-anchor="middle">${r.y}</text>`; });
+  const gridT=[aMax,0,-aMax].map(v=>`<line class="grid-line" x1="${padL}" x2="${W-padR}" y1="${(y0-v*sc).toFixed(1)}" y2="${(y0-v*sc).toFixed(1)}"${v===0?' style="opacity:.9"':''}/>`
+    + `<text class="axis-lbl" x="${padL-4}" y="${(y0-v*sc+3).toFixed(1)}" text-anchor="end">${v>0?'+':''}${r1(v)}°</text>`).join('');
+  const tsvg=`<svg class="hist-chart${narrow?' narrow':''}" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Temperatura de ${MONTHS_LONG[m]} any a any">${gridT}${tb}<polyline class="hist-smooth" points="${smPts}"/>${ax}</svg>`;
+  // Pluja del mes
+  const Hp=150, pTop=14, pBot=24, pInner=Hp-pTop-pBot;
+  const pMax=Math.max(1, ...rows.map(r=>r.p??0));
+  const py=v=>pTop+pInner-(v/pMax)*pInner;
+  let pb='';
+  rows.forEach((r,k)=>{ if(r.p==null) return; const h=(r.p/pMax)*pInner;
+    const col = pRef ? (r.p>=pRef*1.5?'var(--accent)':r.p<=pRef*0.5?'var(--warm)':'var(--text-secondary)') : 'var(--accent)';
+    pb+=`<rect x="${x(k).toFixed(1)}" y="${py(r.p).toFixed(1)}" width="${Math.max(1,bw-1).toFixed(1)}" height="${h.toFixed(1)}" fill="${col}" opacity=".7"><title>${MONTHS[m]} ${r.y}: ${Math.round(r.p)} mm</title></rect>`; });
+  const gridP=[pMax, pMax/2].map(v=>`<line class="grid-line" x1="${padL}" x2="${W-padR}" y1="${py(v).toFixed(1)}" y2="${py(v).toFixed(1)}"/>`
+    + `<text class="axis-lbl" x="${padL-4}" y="${(py(v)+3).toFixed(1)}" text-anchor="end">${Math.round(v)}</text>`).join('');
+  let axp=''; rows.forEach((r,k)=>{ if(r.y%every===0) axp+=`<text class="axis-lbl" x="${(x(k)+bw/2).toFixed(1)}" y="${Hp-8}" text-anchor="middle">${r.y}</text>`; });
+  const psvg=`<svg class="hist-chart${narrow?' narrow':''}" viewBox="0 0 ${W} ${Hp}" role="img" aria-label="Pluja de ${MONTHS_LONG[m]} any a any">${gridP}${pb}${pRef?`<line class="hist-ref" x1="${padL}" x2="${W-padR}" y1="${py(pRef).toFixed(1)}" y2="${py(pRef).toFixed(1)}"/>`:''}${axp}</svg>`;
+  // Rànquing
+  const byT=rows.filter(r=>r.t!=null).slice().sort((a,b)=>b.t-a.t), byP=rows.filter(r=>r.p!=null).slice().sort((a,b)=>b.p-a.p);
+  const last=rows[rows.length-1];
+  const facts=[];
+  if(byT.length) facts.push(`${MONTHS_LONG[m][0].toUpperCase()+MONTHS_LONG[m].slice(1)} més càlid: <b>${byT[0].y}</b> (${r1(byT[0].t)}°) · més fred: <b>${byT[byT.length-1].y}</b> (${r1(byT[byT.length-1].t)}°) · normal ${r1(tRef)}°.`);
+  if(byP.length) facts.push(`Més plujós: <b>${byP[0].y}</b> (${Math.round(byP[0].p)} mm) · més sec: <b>${byP[byP.length-1].y}</b> (${Math.round(byP[byP.length-1].p)} mm) · normal ${Math.round(pRef)} mm.`);
+  if(last && last.t!=null){ const rk=byT.findIndex(r=>r.y===last.y)+1; facts.push(`L'últim ${MONTHS_LONG[m]} complet (${last.y}) va ser el <b>${ordCa(rk)} més càlid</b> de ${byT.length}, amb ${r1(last.t)}° i ${Math.round(last.p??0)} mm.`); }
+  if(showPartial){ const a=curPartial[0]!=null&&tRef!=null?curPartial[0]-tRef:null;
+    facts.push(`${MONTHS_LONG[m][0].toUpperCase()+MONTHS_LONG[m].slice(1)} ${d.curYear} (${curPartial[2]} dies fins ara): ${curPartial[0]!=null?`${r1(curPartial[0])}°${a!=null?` (${a>=0?'+':'−'}${r1(Math.abs(a))}° sobre la normal)`:''}`:''}${curPartial[1]!=null?` · ${Math.round(curPartial[1])} mm`:''}.`); }
+  return `<div class="hist-chips">${chips}</div>
+    <div class="out-sub">🌡️ ${MONTHS_LONG[m][0].toUpperCase()+MONTHS_LONG[m].slice(1)}: temperatura mitjana · diferència amb la normal (${r1(tRef)}°)</div>${tsvg}
+    <div class="out-sub">🌧️ ${MONTHS_LONG[m][0].toUpperCase()+MONTHS_LONG[m].slice(1)}: pluja (mm)</div>${psvg}
+    <div class="spread-note">Cada barra és un any. La ratlla de la pluja és la normal del mes; blau: mes molt plujós
+    (una vegada i mitja la normal o més); taronja: mes molt sec (la meitat o menys).</div>
+    <div class="hist-facts">${facts.map(f=>`<div>${f}</div>`).join('')}</div>`;
 }
 
 /* ── Qualitat de l'aire ──────────────────────────────────────────────────────── */
