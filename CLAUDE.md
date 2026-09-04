@@ -180,7 +180,7 @@ Aquestes regles no són opcionals; el repositori és públic i l'app es publica 
 6. **Cap secret al codi.** `VAPID_PUBLIC` és pública a propòsit. La clau privada
    (`VAPID_PRIVATE_KEY`) i els telèfons donats d'alta (`PUSH_SUBS`) viuen als secrets del
    repositori i **no han d'aparèixer mai** al codi, als logs ni als commits.
-7. **Dades personals.** `FAMILY`, `BIRTHDAYS` i `EVENTS` es publiquen tal qual.
+7. **Dades personals.** `FAMILY`, `BIRTHDAYS`, `SANTS` i `EVENTS` es publiquen tal qual.
    **Només noms de pila.** Res de cognoms, adreces, telèfons ni anys de naixement; les
    coordenades han de ser les del poble, mai les d'una casa.
 8. **Permisos dels workflows.** `avisos.yml` té `contents: read`. L'únic amb permís

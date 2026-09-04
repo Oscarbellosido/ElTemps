@@ -96,6 +96,7 @@ h1 .plus { color: var(--accent); }
 .fun-speak-btn:hover { opacity:1; transform:scale(1.2); }
 .fun-birthday { display:block; background:rgba(251,191,36,.18); border:1.5px solid rgba(251,191,36,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--warn); }
 .fun-event { display:block; background:rgba(74,222,128,.15); border:1.5px solid rgba(74,222,128,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--good); }
+.fun-sant { display:block; background:rgba(56,189,248,.15); border:1.5px solid rgba(56,189,248,.5); border-radius:10px; padding:.35rem .7rem; margin-bottom:.45rem; font-size:.97rem; font-weight:700; color:var(--accent); }
 .fun-special { margin-bottom:.8rem; }
 
 /* ── Cerca ──────────────────────────────────────────────────────────────────── */
@@ -525,7 +526,7 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.8.0';
 const BUILD_DATE  = '2026-09-04';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -3283,6 +3284,24 @@ function todaysBirthdays(){
   const n=new Date(); return BIRTHDAYS.filter(b=>b.m===n.getMonth()+1&&b.d===n.getDate());
 }
 
+/* Sants (onomàstiques) del calendari familiar. Igual que a BIRTHDAYS: només noms
+   de pila, i és públic. Independent dels aniversaris reals: pot haver-hi qui
+   celebri totes dues coses en dates diferents (o cap de les dues). */
+const SANTS = [
+  {m:1, d:26, name:'Paula'},
+  {m:2, d:7,  name:'Ricard'},
+  {m:3, d:14, name:'Arnau'},
+  {m:4, d:23, name:'Jordi'},
+  {m:7, d:26, name:'Anna'},
+  {m:8, d:15, name:'Maria'},  {m:8, d:25, name:'Lluís'},  {m:8, d:31, name:'Ramon'},
+  {m:9, d:8,  name:'Núria'},  {m:9, d:15, name:'Mar'},    {m:9, d:17, name:'Ari'},
+  {m:9, d:24, name:'Gerard'}, {m:9, d:29, name:'Miquel'},
+  {m:11, d:3, name:'Sílvia'}, {m:11, d:4, name:'Carles'}, {m:11, d:11, name:'Martí'},
+];
+function todaysSants(){
+  const n=new Date(); return SANTS.filter(s=>s.m===n.getMonth()+1&&s.d===n.getDate());
+}
+
 /* Esdeveniments especials (dia i mes, cada any) */
 const EVENTS = [
   {m:7, d:4, msg:'🎉 Festa familiar! A gaudir a tope!!!'},
@@ -3309,13 +3328,17 @@ function familyFor(loc){
 
 function renderSpecial(fc){
   const bdays=todaysBirthdays();
+  const sants=todaysSants();
   const evts=todaysEvents();
-  if(!bdays.length && !evts.length) return '';
+  if(!bdays.length && !sants.length && !evts.length) return '';
   const bdayHtml=bdays.length
     ? `<span class="fun-birthday">🎂 Avui és l'aniversari de <strong>${esc(joinNames(bdays.map(b=>b.name)))}</strong>! Per molts anys!! 🎉</span>`
     : '';
+  const santHtml=sants.length
+    ? `<span class="fun-sant">🕯️ Avui és Sant <strong>${esc(joinNames(sants.map(s=>s.name)))}</strong></span>`
+    : '';
   const evtHtml=evts.map(e=>`<span class="fun-event">${esc(e.msg)}</span>`).join('');
-  return `<div class="fun-special" id="specialBanner">${evtHtml}${bdayHtml}</div>`;
+  return `<div class="fun-special" id="specialBanner">${evtHtml}${santHtml}${bdayHtml}</div>`;
 }
 
 function renderFun(loc, fc){

@@ -127,7 +127,7 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 
 ## ✨ Funcions actuals
 
-- [x] **Aniversaris i dies assenyalats**: quan toca, surt una felicitació a dalt de tot
+- [x] **Aniversaris, sants i dies assenyalats**: quan toca, surt una felicitació a dalt de tot
 - [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
@@ -258,7 +258,7 @@ res prou destacable, o que era fora de la franja horària de la regla.
   Sense això, un nom de lloc amb codi HTML s'executaria al navegador.
 - Les **coordenades del GPS** s'arrodoneixen amb `coarse()` (~100 m) abans d'enviar-les a la
   geocodificació inversa. No cal més precisió i així no surt la posició exacta del dispositiu.
-- ⚠️ **Les llistes `FAMILY`, `BIRTHDAYS` i `EVENTS` són públiques.** Aquest repo és obert i
+- ⚠️ **Les llistes `FAMILY`, `BIRTHDAYS`, `SANTS` i `EVENTS` són públiques.** Aquest repo és obert i
   `index.html` es publica sencer: tothom pot llegir el que hi posis. Regla: **només noms de
   pila**. Res de cognoms, adreces, telèfons, anys de naixement ni frases com "a casa d'en …".
   Les coordenades han de ser les del poble, mai les d'una casa. Si algun dia hi vols posar
