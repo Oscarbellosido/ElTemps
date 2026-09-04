@@ -525,8 +525,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.7.0';
-const BUILD_DATE  = '2026-09-02';
+const APP_VERSION = '1.7.1';
+const BUILD_DATE  = '2026-09-04';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -3181,12 +3181,13 @@ function showWelcome(){
     <p class="welcome-sub">Predicció meteorològica de precisió per a Catalunya i tot el món</p>
     <ul class="welcome-features">
       <li>🔍 <strong>Cerca qualsevol ciutat</strong> — suggeriments en temps real mentre escrius</li>
-      <li>📡 <strong>Múltiples models</strong> — consens entre ECMWF, ICON, GFS, AROME i d'altres per a la millor precisió</li>
-      <li>🌧️ <strong>Radar de pluja interactiu</strong> — de les últimes dues hores fins a sis hores endavant, per veure cap on va la tempesta</li>
+      <li>📡 <strong>Consens multi-model</strong> — ECMWF, ICON, AROME, GFS, GEM, UKMO i JMA, amb indicador de fiabilitat</li>
+      <li>🌧️ <strong>Radar de pluja</strong> — de les últimes dues hores fins a sis hores endavant, per veure cap on va la tempesta</li>
+      <li>🔮 <strong>Mesos vinents</strong> i 📜 <strong>clima des del 1940</strong> — tendència estacional i 86 anys d'històric real, mes a mes</li>
       <li>⚠️ <strong>Avisos oficials</strong> — alertes de Meteoalarm i AEMET en temps real</li>
-      <li>🔗 <strong>Desa i comparteix</strong> — el resum del dia amb un sol toc</li>
+      <li>🔔 <strong>Avisos al mòbil</strong> — calor forta o pluja a punt de caure, encara amb l'app tancada</li>
+      <li>🔗 <strong>Favorits i compartir</strong> — desa els teus llocs i comparteix el resum del dia amb un sol toc</li>
       <li>📵 <strong>Mode sense connexió</strong> — mostra l'última dada coneguda si no hi ha xarxa</li>
-      <li>😜 <strong>Targeta de benvinguda amb so</strong> — missatge meteorològic parlat, desactivat per defecte; activa'l amb el botó <strong>😜</strong> a dalt a la dreta</li>
     </ul>
     <button class="welcome-close" onclick="closeWelcome()">D'acord, comencem ✓</button>
   </div>`;
