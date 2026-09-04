@@ -525,7 +525,7 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.7.2';
 const BUILD_DATE  = '2026-09-04';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -3274,10 +3274,10 @@ const BIRTHDAYS = [
   {m:6, d:9,  name:'Paula'},  {m:6, d:13, name:'Jofre'},  {m:6, d:14, name:'Lluís'},
   {m:7, d:11, name:'Olga'}, {m:7, d:12, name:'Avi Miquel'}, {m:7, d:22, name:'Ona'}, {m:7, d:25, name:'Àvia Sílvia'},
   {m:8, d:6,  name:'Queralt'}, {m:8, d:8,  name:'Mar'},   {m:8, d:24, name:'Anna'},
-  {m:9, d:11, name:'Bernadette'}, {m:9, d:24, name:'Miquel'}, {m:9, d:25, name:'Sílvia'}, {m:9, d:30, name:'Ray'},
+  {m:9, d:11, name:'Bernadette'}, {m:9, d:25, name:'Miquel'}, {m:9, d:26, name:'Sílvia'}, {m:9, d:30, name:'Ray'},
   {m:10, d:15, name:'Duna'},  {m:10, d:18, name:'Arnau'},
   {m:11, d:14, name:'Arnau'}, {m:11, d:30, name:'Núria'},
-  {m:12, d:16, name:'Jou'},   {m:12, d:19, name:'Ricard'}, {m:12, d:19, name:'Ari'}, {m:12, d:22, name:'Maria'},
+  {m:12, d:16, name:'Jou'},   {m:12, d:20, name:'Ricard'}, {m:12, d:20, name:'Ari'}, {m:12, d:22, name:'Maria'},
 ];
 function todaysBirthdays(){
   const n=new Date(); return BIRTHDAYS.filter(b=>b.m===n.getMonth()+1&&b.d===n.getDate());
