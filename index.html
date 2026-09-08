@@ -526,8 +526,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.8.0';
-const BUILD_DATE  = '2026-09-04';
+const APP_VERSION = '1.8.1';
+const BUILD_DATE  = '2026-09-08';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -3039,9 +3039,13 @@ function showRadarFrame(idx){
   const t=$('radarTime');
   if(t){
     if(f.type==='model'){
-      // la pluja horària del model és la de l'hora que acaba en aquesta marca: 17–18 h
-      const h0=new Date(f.time*1000-36e5).getHours();
-      t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${h0}–${d.getHours()} h`
+      // Open-Meteo dona f.time com l'INICI del tram horari (no el final): la pluja
+      // d'aquest fotograma és la prevista entre f.time i una hora més tard. Abans es
+      // restava una hora per error i sortia el tram just anterior (p.ex. "13–14 h" en
+      // comptes de "14–15 h"), que no lligava amb el "+X h" i semblava que el radar
+      // saltés enrere en comptes de continuar.
+      const end=new Date(f.time*1000+36e5);
+      t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getHours()}–${end.getHours()} h`
         +` <span class="radar-model">◈ model +${f.plus} h</span>`;
     }else{
       t.innerHTML=`${d.getDate()} ${MONTHS[d.getMonth()]} ${hh}:${mm}`
@@ -3148,11 +3152,13 @@ async function loadRadarForecast(loc, gen){
   try{ g=await fetchRadarForecast(loc); }
   catch{ return; }                   // sense previsió del model, el radar es queda com era
   if(gen!==radarGen || !radarMap || !radarFrames.length || typeof L==='undefined') return;
-  const now=Date.now();
-  for(const h of g.hours){
-    radarFrames.push({ time:h.time, type:'model', plus:Math.max(1, Math.ceil((h.time*1000-now)/36e5)) });
+  // "+Xh" és senzillament la posició dins la seqüència (1a hora de previsió, 2a...),
+  // no un càlcul contra l'hora exacta: així mai pot sortir un número que no lliga amb
+  // l'etiqueta de l'hora que hi ha al costat (vegeu showRadarFrame).
+  g.hours.forEach((h,i)=>{
+    radarFrames.push({ time:h.time, type:'model', plus:i+1 });
     radarLayers.push(radarFcLayer(g,h));
-  }
+  });
   const slider=$('radarSlider'); if(slider) slider.max=radarFrames.length-1;
 }
 
