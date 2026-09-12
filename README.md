@@ -132,7 +132,7 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
 - [x] **Avisos oficials** (Meteoalarm/AEMET) per província, només nivell groc o superior i actius ara — via proxy Cloudflare (worker `mecai`, compartit amb Noticies)
-- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent, sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, fiabilitat dels models)
+- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent (amb el seu nom tradicional: Tramuntana, Garbí, Mestral...), sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, fiabilitat dels models)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
 - [x] **Gràfic horari** (corba de temperatura + barres de pluja) a "Pròximes 24 hores"
 - [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃) **+ pol·len** (gramínies, olivera, bedoll…)

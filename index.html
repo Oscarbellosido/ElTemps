@@ -526,8 +526,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.8.1';
-const BUILD_DATE  = '2026-09-08';
+const APP_VERSION = '1.9.0';
+const BUILD_DATE  = '2026-09-12';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -789,6 +789,12 @@ function r1(n){ return Math.round(n*10)/10; }
 function compass(deg){
   const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
   return dirs[Math.round(deg/22.5)%16];
+}
+/* Rosa dels vents catalana (les vuit direccions clàssiques de la Mediterrània):
+   més reconeixible per a la gent d'aquí que la sigla en anglès (N, NNE...). */
+function windName(deg){
+  const names=['Tramuntana','Gregal','Llevant','Xaloc','Migjorn','Garbí','Ponent','Mestral'];
+  return names[Math.round(deg/45)%8];
 }
 function showStatus(html, kind){ const s=$('status'); s.className=kind||''; s.innerHTML=html; s.style.display=(kind?'block':'none'); }
 function hideStatus(){ const s=$('status'); s.className=''; s.style.display='none'; }
@@ -1453,10 +1459,17 @@ function renderSummary(loc, fc, models, air){
     }
   }
 
-  // Vent destacable
+  // Vent: sempre es diu si serà destacable o no, i de quina banda ve pel seu nom
+  // tradicional (Tramuntana, Gregal...), no per la sigla en anglès (N, NNE...).
   const wmax=Math.round(d.wind_speed_10m_max?.[0]??0), gust=Math.round(d.wind_gusts_10m_max?.[0]??0);
-  if(gust>=50 || wmax>=35)
-    txt += ` Bufarà vent de <strong>${compass(d.wind_direction_10m_dominant?.[0]??0)}</strong> amb ratxes de fins a <strong>${gust} km/h</strong>.`;
+  const windDeg=d.wind_direction_10m_dominant?.[0];
+  if(gust>=50 || wmax>=35){
+    txt += ` Bufarà <strong>${windName(windDeg??0)}</strong>, amb ratxes de fins a <strong>${gust} km/h</strong>.`;
+  } else if(wmax>=20 && windDeg!=null){
+    txt += ` Bufarà una mica de <strong>${windName(windDeg)}</strong> (fins a ${wmax} km/h), sense ser destacable.`;
+  } else {
+    txt += ` No es preveu vent destacable.`;
+  }
 
   // Etiquetes d'avís / consell
   const uv=d.uv_index_max?.[0]??0;
@@ -1467,7 +1480,7 @@ function renderSummary(loc, fc, models, air){
   if(feelsNow >= tNow+3 && tNow>=25) tags.push([`🥵 Xafogor: sensació ${feelsNow}° per la humitat`,'warn']);
   if(tmin<=3)  tags.push(['🧥 Fred: abriga\'t','warn']);
   if(uv>=7)    tags.push([`🧴 UV alt (${r1(uv)}): protecció`,'warn']);
-  if(gust>=50) tags.push(['💨 Ratxes fortes','warn']);
+  if(gust>=50) tags.push([`💨 Ratxes fortes de ${windName(windDeg??0)}`,'warn']);
 
   // Nivell de contaminació (qualitat de l'aire)
   if(air?.current?.european_aqi!=null){
