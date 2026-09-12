@@ -526,7 +526,7 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.9.1';
 const BUILD_DATE  = '2026-09-12';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -1465,7 +1465,10 @@ function renderSummary(loc, fc, models, air){
   const windDeg=d.wind_direction_10m_dominant?.[0];
   if(gust>=50 || wmax>=35){
     txt += ` Bufarà <strong>${windName(windDeg??0)}</strong>, amb ratxes de fins a <strong>${gust} km/h</strong>.`;
-  } else if(wmax>=20 && windDeg!=null){
+  } else if(wmax>=8 && windDeg!=null){
+    // Per sota d'uns 8 km/h el penell tot just es mou i la direcció que dona el
+    // model ja no diu res fiable; per sobre, val la pena anomenar el vent encara
+    // que sigui fluixet (és el que la gent nota i pregunta, encara que no calgui avisar-ne).
     txt += ` Bufarà una mica de <strong>${windName(windDeg)}</strong> (fins a ${wmax} km/h), sense ser destacable.`;
   } else {
     txt += ` No es preveu vent destacable.`;
