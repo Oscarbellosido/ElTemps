@@ -526,8 +526,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.9.1';
-const BUILD_DATE  = '2026-09-12';
+const APP_VERSION = '1.9.2';
+const BUILD_DATE  = '2026-09-14';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1463,13 +1463,16 @@ function renderSummary(loc, fc, models, air){
   // tradicional (Tramuntana, Gregal...), no per la sigla en anglès (N, NNE...).
   const wmax=Math.round(d.wind_speed_10m_max?.[0]??0), gust=Math.round(d.wind_gusts_10m_max?.[0]??0);
   const windDeg=d.wind_direction_10m_dominant?.[0];
+  // "En algun moment del dia": el número és el màxim previst per a TOT el dia, no el
+  // d'ara mateix (això surt a "Vent ara" / "Ratxes ara" més avall) — sense aclarir-ho
+  // semblava que es contradiguessin quan el vent d'ara i el pic del dia eren molt diferents.
   if(gust>=50 || wmax>=35){
-    txt += ` Bufarà <strong>${windName(windDeg??0)}</strong>, amb ratxes de fins a <strong>${gust} km/h</strong>.`;
+    txt += ` En algun moment del dia bufarà <strong>${windName(windDeg??0)}</strong>, amb ratxes de fins a <strong>${gust} km/h</strong>.`;
   } else if(wmax>=8 && windDeg!=null){
     // Per sota d'uns 8 km/h el penell tot just es mou i la direcció que dona el
     // model ja no diu res fiable; per sobre, val la pena anomenar el vent encara
     // que sigui fluixet (és el que la gent nota i pregunta, encara que no calgui avisar-ne).
-    txt += ` Bufarà una mica de <strong>${windName(windDeg)}</strong> (fins a ${wmax} km/h), sense ser destacable.`;
+    txt += ` En algun moment del dia bufarà una mica de <strong>${windName(windDeg)}</strong> (fins a ${wmax} km/h), sense ser destacable.`;
   } else {
     txt += ` No es preveu vent destacable.`;
   }
@@ -1690,8 +1693,8 @@ function renderNow(loc, fc){
     ? `<div class="now-rain-badge">💧 ${rainProb}% prob. de pluja avui${(rainProb>0 && parseFloat(rainMm)>0)?` · ${rainMm} mm`:''}</div>` : '';
 
   const stats = [
-    ['💨 Vent', `${Math.round(c.wind_speed_10m)} <small>${u.wind_speed_10m}</small> ${compass(c.wind_direction_10m)}`],
-    ['🌬️ Ratxes', `${Math.round(c.wind_gusts_10m)} <small>${u.wind_gusts_10m}</small>`],
+    ['💨 Vent ara', `${Math.round(c.wind_speed_10m)} <small>${u.wind_speed_10m}</small> ${compass(c.wind_direction_10m)}`],
+    ['🌬️ Ratxes ara', `${Math.round(c.wind_gusts_10m)} <small>${u.wind_gusts_10m}</small>`],
     ['💧 Humitat', `${c.relative_humidity_2m}<small>%</small>`],
     ['🌡️ Pressió', `${Math.round(c.pressure_msl)} <small>hPa</small>`],
     ['☁️ Núvols', `${c.cloud_cover}<small>%</small>`],
