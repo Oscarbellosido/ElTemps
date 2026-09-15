@@ -359,6 +359,20 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
   .out-bar .txt { font-size:.6rem; }
 }
 
+/* ── Compara amb un altre lloc ────────────────────────────────────────────────── */
+.compare-search { display:flex; gap:.5rem; margin-bottom:.9rem; flex-wrap:wrap; }
+.compare-search input { flex:1; min-width:8rem; }
+.cmp-head, .cmp-row { display:grid; grid-template-columns:4.6rem 1fr 1fr; gap:.5rem; align-items:center; }
+.cmp-head { font-size:.63rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.04em; padding-bottom:.4rem; }
+.cmp-head .cmp-city { font-size:.8rem; font-weight:700; color:var(--text-primary); text-transform:none; letter-spacing:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cmp-row { padding:.4rem 0; border-top:1px solid var(--border); }
+.cmp-lbl { font-size:.72rem; color:var(--text-secondary); }
+.cmp-val { font-size:.85rem; font-weight:600; }
+.cmp-ic { font-size:1.4rem; }
+@media (max-width:520px){
+  .cmp-head, .cmp-row { grid-template-columns:3.5rem 1fr 1fr; gap:.3rem; }
+}
+
 /* ── Clima des del 1940 (històric ERA5) ─────────────────────────────────────── */
 .hist-tabs { display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:.9rem; }
 .hist-tab { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); font-size:.76rem; font-weight:600; padding:.38rem .8rem; border-radius:20px; cursor:pointer; transition:all .15s; font-family:inherit; }
@@ -526,8 +540,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.9.2';
-const BUILD_DATE  = '2026-09-14';
+const APP_VERSION = '1.10.0';
+const BUILD_DATE  = '2026-09-15';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -882,7 +896,7 @@ function updateNotifBtn(){
   b.textContent = notifOn() ? '🔔 Avisos actius' : '🔔 Avisa\'m';
   b.classList.toggle('on', notifOn());
   b.title = notifOn() ? 'Avisos activats en aquest telèfon — toca per apagar-los'
-                      : 'Rebre avisos de calor forta i pluja en aquest telèfon';
+                      : 'Rebre avisos de calor forta, pluja o vent fort en aquest telèfon';
 }
 /* base64url → bytes: el format que demana applicationServerKey */
 function b64ToU8(s){
@@ -967,7 +981,7 @@ function showNotifDialog(payload, state, msg){
         <li>A <strong>Secret</strong> enganxa el text copiat.</li>
         <li>Prem <strong>Add secret</strong>. Ja està.</li>
       </ol>
-      <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta o pluja a punt de caure.
+      <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta, pluja o vent fort a punt d'arribar.
       Si ja tenies un altre telèfon donat d'alta, edita el secret i afegeix-hi aquest, separat per una coma.
       <br><br>Pots tornar a prémer <strong>🔔</strong> quan vulguis per recuperar aquest text: no apaga res.</p>
       <button class="notif-off" onclick="disableNotif()">Desactivar els avisos en aquest telèfon</button>`;
@@ -1319,6 +1333,7 @@ function render(loc, fc, models, air, marine){
     renderAir(air),
     renderRadar(),
     renderConsensus(models),
+    renderCompareCard(),
     renderHist(),
     renderOutlook(),
   ].filter(Boolean).join('');
@@ -1867,6 +1882,73 @@ function renderConsensus(models){
   </div>`;
 }
 function wireConsensus(models){ setConsensusDay(0); }
+
+/* ── Compara amb un altre lloc ────────────────────────────────────────────────── */
+/* Compara la població actual (currentLoc/currentFc) amb una segona de triada aquí.
+   És independent del render() principal: es guarda en variables pròpies perquè,
+   quan es canvia de ciutat principal, la comparació es quedi (es torna a calcular
+   amb les noves dades sense haver de tornar a cercar la segona població). */
+let compareLoc=null, compareFc=null, compareBusy=false, compareErr=null;
+
+function renderCompareCard(){
+  return `<div class="card" id="compareCard">
+    <h2><span class="ic">⚖️</span> Compara amb un altre lloc</h2>
+    <div id="compareInner">${compareInnerHtml()}</div>
+  </div>`;
+}
+function compareInnerHtml(){
+  return `<div class="compare-search">
+      <input type="text" id="compareInput" placeholder="Nom d'una població…" value="${compareLoc?esc(compareLoc.name):''}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();compareSearch();}">
+      <button class="btn-sec" onclick="compareSearch()">${compareLoc?'Canvia':'Compara'}</button>
+      ${compareLoc?`<button class="btn-sec" onclick="clearCompare()" title="Treure la comparació">✕</button>`:''}
+    </div>
+    <div id="compareBody">${compareBodyHtml()}</div>`;
+}
+function compareBodyHtml(){
+  if(compareBusy) return `<div class="out-skel"><span class="spinner"></span>Carregant${compareLoc?' '+esc(compareLoc.name):''}…</div>`;
+  if(compareErr) return `<div class="out-skel">${esc(compareErr)}</div>`;
+  if(!compareLoc) return `<p class="card-note">Cerca una població per veure-la costat a costat amb ${esc(currentLoc?.name||'la d\'ara')}.</p>`;
+  if(!compareFc || !currentLoc || !currentFc) return '';
+  return renderCompareTable();
+}
+function paintCompare(){ const el=$('compareInner'); if(el) el.innerHTML=compareInnerHtml(); }
+
+async function compareSearch(){
+  const input=$('compareInput'); const name=input?.value?.trim();
+  if(!name) return;
+  compareErr=null; compareBusy=true; paintCompare();
+  try{
+    const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=ca`,{signal:AbortSignal.timeout(8000)});
+    if(!r.ok) throw new Error('geo');
+    const j=await r.json(), res=j.results?.[0];
+    if(!res){ compareBusy=false; compareErr=`No s'ha trobat cap població amb aquest nom.`; paintCompare(); return; }
+    compareLoc={ name:res.name, lat:res.latitude, lon:res.longitude, cc:res.country_code, admin1:res.admin1 };
+    compareFc=await fetchForecast(compareLoc);
+    compareBusy=false; paintCompare();
+  }catch{
+    compareBusy=false; compareErr=`No s'han pogut carregar les dades d'aquesta població. Torna-ho a provar.`; paintCompare();
+  }
+}
+function clearCompare(){ compareLoc=null; compareFc=null; compareErr=null; compareBusy=false; paintCompare(); }
+
+/* Taula compacta: icona, temperatura d'ara, sensació, màx/mín d'avui, pluja i vent.
+   Fa servir windName() i compass() ja existents perquè digui el mateix que la resta de l'app. */
+function renderCompareTable(){
+  const aLoc=currentLoc, aFc=currentFc, bLoc=compareLoc, bFc=compareFc;
+  const ac=aFc.current, ad=aFc.daily, bc=bFc.current, bd=bFc.daily;
+  const row=(lbl,a,b)=>`<div class="cmp-row"><div class="cmp-lbl">${lbl}</div><div class="cmp-val">${a}</div><div class="cmp-val">${b}</div></div>`;
+  const windTxt=c=>`${Math.round(c.wind_speed_10m)} <small>km/h</small> ${compass(c.wind_direction_10m)}`;
+  return `<div class="cmp-head"><div></div><div class="cmp-city">${esc(aLoc.name)}</div><div class="cmp-city">${esc(bLoc.name)}</div></div>
+    ${row('', `<span class="cmp-ic">${wmo(ac.weather_code)[0]}</span>`, `<span class="cmp-ic">${wmo(bc.weather_code)[0]}</span>`)}
+    ${row('Ara', `${Math.round(ac.temperature_2m)}°`, `${Math.round(bc.temperature_2m)}°`)}
+    ${row('Sensació', `${Math.round(ac.apparent_temperature)}°`, `${Math.round(bc.apparent_temperature)}°`)}
+    ${row('Avui', `${Math.round(ad.temperature_2m_min[0])}°–${Math.round(ad.temperature_2m_max[0])}°`, `${Math.round(bd.temperature_2m_min[0])}°–${Math.round(bd.temperature_2m_max[0])}°`)}
+    ${row('Pluja avui', `${ad.precipitation_probability_max?.[0]??0}%`, `${bd.precipitation_probability_max?.[0]??0}%`)}
+    ${row('Vent ara', windTxt(ac), windTxt(bc))}
+    ${row('Humitat', `${ac.relative_humidity_2m}%`, `${bc.relative_humidity_2m}%`)}
+    <div class="card-note">${esc(wmo(ac.weather_code)[1])} a ${esc(aLoc.name)} · ${esc(wmo(bc.weather_code)[1])} a ${esc(bLoc.name)}.</div>`;
+}
 
 function modelVals(models, mkey, day){
   const d=models.daily;
@@ -3211,7 +3293,7 @@ function showWelcome(){
       <li>🌧️ <strong>Radar de pluja</strong> — de les últimes dues hores fins a sis hores endavant, per veure cap on va la tempesta</li>
       <li>🔮 <strong>Mesos vinents</strong> i 📜 <strong>clima des del 1940</strong> — tendència estacional i 86 anys d'històric real, mes a mes</li>
       <li>⚠️ <strong>Avisos oficials</strong> — alertes de Meteoalarm i AEMET en temps real</li>
-      <li>🔔 <strong>Avisos al mòbil</strong> — calor forta o pluja a punt de caure, encara amb l'app tancada</li>
+      <li>🔔 <strong>Avisos al mòbil</strong> — calor forta, pluja o vent fort a punt d'arribar, encara amb l'app tancada</li>
       <li>🔗 <strong>Favorits i compartir</strong> — desa els teus llocs i comparteix el resum del dia amb un sol toc</li>
       <li>📵 <strong>Mode sense connexió</strong> — mostra l'última dada coneguda si no hi ha xarxa</li>
     </ul>

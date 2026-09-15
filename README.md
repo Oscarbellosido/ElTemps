@@ -152,8 +152,11 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] **Clima des del 1940**: enguany mes a mes contra la normal, tendència any a any des del 1940 i
   un mes concret a través dels anys (rècords de calor, fred, pluja i sequera), amb dades reals ERA5
 - [x] **Efectes animats** a la targeta "Ara" (sol, núvols, pluja, neu, tempesta amb llampecs, estrelles)
-- [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta o pluja a punt de caure,
-  encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)
+- [x] **Compara amb un altre lloc**: cerca una segona població i veu-la costat a costat amb
+  l'actual (temperatura, sensació, màx/mín, pluja i vent d'avui); es manté encara que canviïs
+  de ciutat principal
+- [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta, pluja o vent fort a punt
+  d'arribar, encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)
 
 ---
 
@@ -162,7 +165,6 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 Coses que es poden incorporar més endavant:
 
 - [ ] **Més dies de consens** (no només 3) i afegir-hi més models si Open-Meteo en treu de nous
-- [ ] **Comparació de llocs** (veure dos pobles alhora)
 - [ ] **Idioma anglès** a part del català/castellà
 
 > Quan afegeixis una funció nova, marca-la aquí amb `[x]` i mou-la a "Funcions actuals".
@@ -171,9 +173,9 @@ Coses que es poden incorporar més endavant:
 
 ## 🔔 Avisos al mòbil (i al rellotge)
 
-L'app pot avisar-te al telèfon quan es prevegi **calor forta** o **pluja a punt de caure**,
-encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís hi arriba
-sol: el rellotge repeteix les notificacions del mòbil, no cal cap app de rellotge.
+L'app pot avisar-te al telèfon quan es prevegi **calor forta**, **pluja** o **vent fort a punt
+d'arribar**, encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís
+hi arriba sol: el rellotge repeteix les notificacions del mòbil, no cal cap app de rellotge.
 
 ### Com s'activa (un sol cop per telèfon)
 
@@ -211,12 +213,15 @@ d'això, cada regla només pot disparar en un moment concret:
   o sigui un cop al dia.
 - **Pluja** (≥ 60% de probabilitat en les properes 2 h): només **si encara no plou** — quan
   comença, la condició deixa de complir-se sola — i només entre les **7 i les 22 h**.
+- **Vent fort** (ratxes ≥ 50 km/h, o mitjana ≥ 35 km/h, en les properes 3 h): només **si ara
+  encara no en fa** — mateix truc que la pluja — i només entre les **7 i les 22 h**.
 
 Els llindars són al principi de `scripts/avisos.js`, ben visibles, per si algun dia et
 sembla que avisa massa o massa poc.
 
-> ⚠️ Els criteris de calor de `scripts/avisos.js` són una còpia de `heatPeak()` de
-> `index.html`. Si en canvies un, canvia l'altre, o l'avís i la pantalla diran coses diferents.
+> ⚠️ Els criteris de calor i de vent de `scripts/avisos.js` són una còpia de `heatPeak()` i
+> `windName()` de `index.html`. Si en canvies un, canvia l'altre, o l'avís i la pantalla
+> diran coses diferents.
 
 ### Que no es desactivi sola
 

@@ -69,7 +69,7 @@ Blocs principals del `<script>` (l'ordre a dins del fitxer):
 | `loadWeather()` | **punt d'entrada de tota càrrega de dades** |
 | Avisos oficials | Meteoalarm via proxy Cloudflare |
 | `render()` | compon tot el resultat concatenant els `renderXxx()` |
-| Targetes | resum del dia, ara, horària, diària, mar i muntanya, aire, radar, consens, clima des del 1940, mesos vinents |
+| Targetes | resum del dia, ara, horària, diària, mar i muntanya, aire, radar, consens, compara amb un altre lloc, clima des del 1940, mesos vinents |
 | Mesos vinents | estacional CFSv2, normal climàtica ERA5, risc d'incendi, crescudes GloFAS, El Niño |
 | Clima des del 1940 | històric ERA5 agregat per mesos; tres vistes (`histView`): enguany, tendència, un mes |
 | Radar | RainViewer + Leaflet + previsió de pluja del model a hores vista |
@@ -100,6 +100,13 @@ Punts clau d'aquest flux:
   s'ha de veure igual. Si tot falla, es pinta la còpia de `OFFLINE_KEY`. El principi de tot
   el projecte —també del service worker— és **que mai es vegi una pantalla en blanc**.
 - Tots els `fetch` porten `AbortSignal.timeout(...)`.
+- **"Compara amb un altre lloc" és diferent de les targetes de càrrega tardana.** No fa
+  servir `IntersectionObserver` ni depèn del `gen` de `loadWeather`: guarda la seva pròpia
+  població (`compareLoc`/`compareFc`) en variables de mòdul, independents de `currentLoc`.
+  Com que `renderCompareCard()` s'executa dins de `render()`, la comparació es recalcula
+  sola cada cop que canvies de ciutat principal, sense haver de tornar a cercar la segona
+  població. Els canvis dins la targeta (cercar, canviar, treure) no criden `render()`
+  sencer: només repinten `#compareInner` amb `paintCompare()`.
 
 ---
 
@@ -242,15 +249,22 @@ Peça per peça:
 | `sw.js` (esdeveniment `push`) | mostra la notificació del sistema |
 
 **No es desa cap estat d'enviament.** Per evitar repeticions, cada regla només pot disparar
-en una finestra: la calor entre les 7 i les 9 hores locals (`HEAT_HOURS`), la pluja només
-si encara no plou i entre les 7 i les 22 h (`RAIN_HOURS`). Si canvies aquesta lògica,
-pensa primer com evites l'avís repetit cada hora.
+en una finestra: la calor entre les 7 i les 9 hores locals (`HEAT_HOURS`), la pluja i el vent
+fort només si encara no hi són i entre les 7 i les 22 h (`RAIN_HOURS`, `WIND_HOURS`). Si
+canvies aquesta lògica, pensa primer com evites l'avís repetit cada hora.
 
-⚠️ **Duplicació coneguda:** `heatPeak()` existeix a `index.html` **i** a `scripts/avisos.js`,
-amb els mateixos llindars (35 °C / 40 °C). **Si en canvies un, canvia l'altre**, o l'avís i
-la pantalla diran coses diferents. La resposta d'Open-Meteo es demana amb `timezone=auto` i
-l'hora local es llegeix del **text** de la resposta (`.slice(11,13)`), mai amb `new Date()`,
-perquè el runner d'Actions va en UTC.
+⚠️ **Duplicació coneguda:** `heatPeak()` i `windName()` existeixen a `index.html` **i** a
+`scripts/avisos.js`, amb els mateixos llindars (calor: 35 °C / 40 °C; vent: ratxes ≥ 50 km/h
+o mitjana ≥ 35 km/h). **Si en canvies un, canvia l'altre**, o l'avís i la pantalla diran coses
+diferents. La resposta d'Open-Meteo es demana amb `timezone=auto` i l'hora local es llegeix
+del **text** de la resposta (`.slice(11,13)`), mai amb `new Date()`, perquè el runner
+d'Actions va en UTC.
+
+`scripts/avisos.js` exporta les seves funcions (`buildMessage`, `heatPeak`, `rainSoon`,
+`windSoon`, `windName`) darrere d'un guard `require.main === module`: es pot fer
+`require('./avisos.js')` des d'una prova sense que s'executi `main()` ni s'enviï cap avís
+de debò. Quan GitHub Actions el crida amb `node scripts/avisos.js`, `main()` s'executa igual
+que sempre.
 
 El botó 🔔 **mai dona de baixa** el telèfon: només ensenya el text. Donar-se de baixa és una
 acció explícita dins el diàleg (`disableNotif`). Això es va corregir a la v1.5.1 i no s'ha

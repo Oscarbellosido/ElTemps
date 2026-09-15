@@ -5,15 +5,16 @@
    L'executa .github/workflows/avisos.yml un cop cada hora.
 
    Què fa: per cada telèfon donat d'alta al secret PUSH_SUBS, mira el temps del
-   seu poble i, si hi ha calor forta o pluja a punt de caure, li envia un avís.
-   El mòbil el mostra encara que l'app estigui tancada, i el rellotge (Wear OS)
-   el repeteix al canell tot sol.
+   seu poble i, si hi ha calor forta, pluja a punt de caure o vent fort a punt
+   d'arribar, li envia un avís. El mòbil el mostra encara que l'app estigui
+   tancada, i el rellotge (Wear OS) el repeteix al canell tot sol.
 
    PER QUÈ NO CAL RECORDAR QUÈ S'HA ENVIAT: no es desa cap estat enlloc. Perquè
    no arribin avisos repetits, cada regla només pot disparar en un moment concret:
      · La calor només s'avisa al matí (una vegada al dia, entre les 7 i les 9).
      · La pluja només s'avisa si encara NO plou; quan comença a ploure, la
        condició deixa de complir-se tota sola.
+     · El vent fort funciona igual que la pluja: només si ara encara no en fa.
    ════════════════════════════════════════════════════════════════════════════ */
 const webpush = require('web-push');
 
@@ -28,8 +29,11 @@ const SITE = 'https://oscarbellosido.github.io/ElTemps/';
 const HEAT_MIN      = 35;   // graus a partir dels quals s'avisa de calor
 const HEAT_DANGER   = 40;   // a partir d'aquí, avís més seriós
 const RAIN_MIN_PROB = 60;   // % de probabilitat per avisar de pluja
+const WIND_GUST_MIN  = 50;  // ratxes (km/h) a partir de les quals s'avisa de vent (rèplica d'index.html)
+const WIND_SPEED_MIN = 35;  // vent mitjà (km/h) a partir del qual s'avisa (rèplica d'index.html)
 const HEAT_HOURS    = [7, 8, 9];    // hores locals en què es pot avisar de calor
 const RAIN_HOURS    = [7, 22];      // franja local en què es pot avisar de pluja
+const WIND_HOURS    = [7, 22];      // franja local en què es pot avisar de vent (igual que la pluja)
 
 function log(...a) { console.log(...a); }
 
@@ -47,8 +51,8 @@ function parseSubs(raw) {
 
 async function forecast(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
-    + `&current=temperature_2m,apparent_temperature,precipitation,weather_code`
-    + `&hourly=temperature_2m,apparent_temperature,precipitation_probability`
+    + `&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m`
+    + `&hourly=temperature_2m,apparent_temperature,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m`
     + `&timezone=auto&forecast_days=2`;
   const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error('Open-Meteo ha respost ' + r.status);
@@ -96,6 +100,30 @@ function rainSoon(fc) {
   }
   if (best < RAIN_MIN_PROB) return null;
   return { prob: best, hour: at ? parseInt(at.slice(11, 13), 10) : null };
+}
+
+/* Vent fort a punt d'arribar: les properes 3 h, i només si ara encara no en fa
+   (mateix criteri que rainSoon: quan comença, la condició deixa de complir-se sola). */
+function windSoon(fc) {
+  const h = fc.hourly, c = fc.current, s = nowIndex(fc);
+  if (s < 0) return null;
+  if ((c.wind_gusts_10m ?? 0) >= WIND_GUST_MIN) return null;   // ja fa vent fort: no cal avisar
+  let best = null;
+  for (let i = s; i < Math.min(s + 3, h.time.length); i++) {
+    const gust = h.wind_gusts_10m?.[i] ?? 0, speed = h.wind_speed_10m?.[i] ?? 0;
+    if (gust < WIND_GUST_MIN && speed < WIND_SPEED_MIN) continue;
+    if (!best || gust > best.gust) {
+      best = { gust, dir: h.wind_direction_10m?.[i] ?? 0, hour: parseInt(h.time[i].slice(11, 13), 10) };
+    }
+  }
+  return best;
+}
+
+/* Rosa dels vents catalana. Rèplica de windName() de index.html: si en canvies
+   una, canvia l'altra, o l'avís i la pantalla diran noms diferents. */
+function windName(deg) {
+  const names = ['Tramuntana', 'Gregal', 'Llevant', 'Xaloc', 'Migjorn', 'Garbí', 'Ponent', 'Mestral'];
+  return names[Math.round(deg / 45) % 8];
 }
 
 function linkFor(sub) {
@@ -149,6 +177,16 @@ function buildMessage(fc, sub) {
     };
   }
 
+  const wind = windSoon(fc);
+  if (wind && localHour >= WIND_HOURS[0] && localHour < WIND_HOURS[1]) {
+    return {
+      title: `💨 Vent fort${where}`,
+      body: `Cap a les ${wind.hour}h bufarà ${windName(wind.dir)}, amb ratxes de fins a ${Math.round(wind.gust)} km/h.`,
+      tag: 'vent',
+      url: linkFor(sub)
+    };
+  }
+
   return null;
 }
 
@@ -188,4 +226,11 @@ async function main() {
   // No es falla la tasca per un avís no entregat: no volem correus d'error cada hora.
 }
 
-main().catch(e => { console.error('Error inesperat:', e); process.exit(1); });
+// require.main !== module quan es carrega des d'una prova (p.ex. `require('./avisos.js')`)
+// en lloc d'executar-se directament amb `node scripts/avisos.js`: així no s'envien avisos
+// de debò només per haver-lo carregat per provar buildMessage() o windSoon() soles.
+if (require.main === module) {
+  main().catch(e => { console.error('Error inesperat:', e); process.exit(1); });
+}
+
+module.exports = { buildMessage, heatPeak, rainSoon, windSoon, windName, nowIndex };
