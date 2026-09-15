@@ -128,11 +128,11 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 ## ✨ Funcions actuals
 
 - [x] **Aniversaris, sants i dies assenyalats**: quan toca, surt una felicitació a dalt de tot
-- [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol
+- [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol, fase de la lluna i diferència de llum del dia respecte ahir
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
 - [x] **Avisos oficials** (Meteoalarm/AEMET) per província, només nivell groc o superior i actius ara — via proxy Cloudflare (worker `mecai`, compartit amb Noticies)
-- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent (amb el seu nom tradicional: Tramuntana, Garbí, Mestral...), sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, fiabilitat dels models)
+- [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent (amb el seu nom tradicional: Tramuntana, Garbí, Mestral...), sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, possible tempesta elèctrica, onada de calor/fred dels propers dies, fiabilitat dels models)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
 - [x] **Gràfic horari** (corba de temperatura + barres de pluja) a "Pròximes 24 hores"
 - [x] Qualitat de l'aire (EAQI, PM2.5, PM10, NO₂, O₃) **+ pol·len** (gramínies, olivera, bedoll…)
@@ -143,20 +143,21 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
   llegenda de mm/h, per veure cap on va la tempesta
 - [x] Cerca mundial amb autocompletar (català/castellà) + geolocalització
 - [x] Accés ràpid a ciutats catalanes + **favorits** + històric de cerques recents
-- [x] **Compartir** (Web Share) amb enllaços directes (`?lat=&lon=&name=`)
+- [x] **Compartir** (Web Share) amb enllaços directes (`?lat=&lon=&name=`) o com a **imatge** (targeta resum dibuixada en un `<canvas>`, ideal per a WhatsApp)
 - [x] **Frescor de dades**: refresc automàtic cada 10 min, "actualitzat fa X min" i número de versió visible
 - [x] Tema clar/fosc + disseny responsive per a mòbil
 - [x] **PWA instal·lable** a Android/escriptori (manifest + service worker + icones PNG): botó "Instal·la l'aplicació", funciona offline (la carcassa) i s'actualitza sola
 - [x] **Mesos vinents**: tendència estacional fins a 7 mesos (CFSv2) comparada amb la normal
   climàtica 1995-2024, risc d'incendi forestal, risc de crescuda de riu (GloFAS) i El Niño / La Niña
 - [x] **Clima des del 1940**: enguany mes a mes contra la normal, tendència any a any des del 1940 i
-  un mes concret a través dels anys (rècords de calor, fred, pluja i sequera), amb dades reals ERA5
+  un mes concret a través dels anys (rècords de calor, fred, pluja i sequera), amb dades reals ERA5,
+  més una curiositat del mes en curs ("al setembre, de mitjana des del 1995...")
 - [x] **Efectes animats** a la targeta "Ara" (sol, núvols, pluja, neu, tempesta amb llampecs, estrelles)
 - [x] **Compara amb un altre lloc**: cerca una segona població i veu-la costat a costat amb
   l'actual (temperatura, sensació, màx/mín, pluja i vent d'avui); es manté encara que canviïs
   de ciutat principal
-- [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta, pluja o vent fort a punt
-  d'arribar, encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)
+- [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta, tempesta elèctrica, pluja o
+  vent fort a punt d'arribar, encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)
 
 ---
 
@@ -173,8 +174,8 @@ Coses que es poden incorporar més endavant:
 
 ## 🔔 Avisos al mòbil (i al rellotge)
 
-L'app pot avisar-te al telèfon quan es prevegi **calor forta**, **pluja** o **vent fort a punt
-d'arribar**, encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís
+L'app pot avisar-te al telèfon quan es prevegi **calor forta**, **tempesta elèctrica**, **pluja**
+o **vent fort a punt d'arribar**, encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís
 hi arriba sol: el rellotge repeteix les notificacions del mòbil, no cal cap app de rellotge.
 
 ### Com s'activa (un sol cop per telèfon)
@@ -211,6 +212,8 @@ d'això, cada regla només pot disparar en un moment concret:
 
 - **Calor** (pic ≥ 35°, o ≥ 40° per a l'avís seriós): només entre les **7 i les 9 del matí**,
   o sigui un cop al dia.
+- **Tempesta elèctrica** (codis WMO 95/96/99 en les properes 3 h): només **si encara no hi
+  som** — quan comença, la condició deixa de complir-se sola — i només entre les **7 i les 22 h**.
 - **Pluja** (≥ 60% de probabilitat en les properes 2 h): només **si encara no plou** — quan
   comença, la condició deixa de complir-se sola — i només entre les **7 i les 22 h**.
 - **Vent fort** (ratxes ≥ 50 km/h, o mitjana ≥ 35 km/h, en les properes 3 h): només **si ara
@@ -221,7 +224,9 @@ sembla que avisa massa o massa poc.
 
 > ⚠️ Els criteris de calor i de vent de `scripts/avisos.js` són una còpia de `heatPeak()` i
 > `windName()` de `index.html`. Si en canvies un, canvia l'altre, o l'avís i la pantalla
-> diran coses diferents.
+> diran coses diferents. Els codis de tempesta (`STORM_CODES`) són els mateixos codis WMO
+> que ja fa servir la taula `WMO` d'`index.html`; no cal duplicar-los perquè són un estàndard,
+> no un llindar que es pugui voler ajustar.
 
 ### Que no es desactivi sola
 

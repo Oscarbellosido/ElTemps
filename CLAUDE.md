@@ -63,7 +63,7 @@ Blocs principals del `<script>` (l'ordre a dins del fitxer):
 | Configuració | claus de `localStorage`, `APP_VERSION`, `BUILD_DATE`, `VAPID_PUBLIC`, `WORKER_URL` |
 | Taules de dades | `MA_COUNTRY`, `SEV`, `QUICK_CITIES`, `MODELS`, `WMO` |
 | `wxFx` | efectes animats (canvas) sobre la targeta "Ara"; respecta `prefers-reduced-motion` |
-| Helpers | `$`, `esc`, `coarse`, `r1`, `compass`, `showStatus` |
+| Helpers | `$`, `esc`, `coarse`, `r1`, `compass`, `windName`, `moonPhaseLabel`, `dayLengthMinutes`/`dayLightDeltaLabel`, `showStatus` |
 | Estat de l'usuari | tema, recents, favorits, compartir, avisos push, cache offline, frescor |
 | Geocodificació | cerca amb autocompletar en català i castellà |
 | `loadWeather()` | **punt d'entrada de tota càrrega de dades** |
@@ -249,14 +249,18 @@ Peça per peça:
 | `sw.js` (esdeveniment `push`) | mostra la notificació del sistema |
 
 **No es desa cap estat d'enviament.** Per evitar repeticions, cada regla només pot disparar
-en una finestra: la calor entre les 7 i les 9 hores locals (`HEAT_HOURS`), la pluja i el vent
-fort només si encara no hi són i entre les 7 i les 22 h (`RAIN_HOURS`, `WIND_HOURS`). Si
-canvies aquesta lògica, pensa primer com evites l'avís repetit cada hora.
+en una finestra: la calor entre les 7 i les 9 hores locals (`HEAT_HOURS`), i la tempesta, la
+pluja i el vent fort només si encara no hi són i entre les 7 i les 22 h (`STORM_HOURS`,
+`RAIN_HOURS`, `WIND_HOURS`). Si canvies aquesta lògica, pensa primer com evites l'avís
+repetit cada hora.
 
 ⚠️ **Duplicació coneguda:** `heatPeak()` i `windName()` existeixen a `index.html` **i** a
 `scripts/avisos.js`, amb els mateixos llindars (calor: 35 °C / 40 °C; vent: ratxes ≥ 50 km/h
 o mitjana ≥ 35 km/h). **Si en canvies un, canvia l'altre**, o l'avís i la pantalla diran coses
-diferents. La resposta d'Open-Meteo es demana amb `timezone=auto` i l'hora local es llegeix
+diferents. `stormSoon()` fa servir `STORM_CODES = [95,96,99]`, els mateixos codis WMO de
+tempesta que ja hi ha a la taula `WMO` d'`index.html`: com que són un estàndard i no un
+llindar ajustable, no cal mantenir-los sincronitzats de la mateixa manera. La resposta
+d'Open-Meteo es demana amb `timezone=auto` i l'hora local es llegeix
 del **text** de la resposta (`.slice(11,13)`), mai amb `new Date()`, perquè el runner
 d'Actions va en UTC.
 
@@ -292,6 +296,10 @@ de revertir.
 - **No es fa servir la marca "Meteocat"**: és el servei oficial de la Generalitat.
 - L'app **no desa res a cap servidor**: tot el que es recorda va a `localStorage` del
   dispositiu. No hi afegeixis analítica ni cap enviament de dades de l'usuari.
+- **La fase lunar (`moonPhaseLabel`) i la diferència de llum del dia (`dayLightDeltaLabel`)
+  són càlculs astronòmics purs, sense cap crida a cap API.** És a propòsit: no calen dades
+  fresques per a una aproximació d'aquest tipus, i així no s'afegeix cap domini nou a la CSP.
+  No els substitueixis per una crida externa.
 
 ---
 

@@ -378,6 +378,8 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .hist-tab { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); font-size:.76rem; font-weight:600; padding:.38rem .8rem; border-radius:20px; cursor:pointer; transition:all .15s; font-family:inherit; }
 .hist-tab:hover { border-color:var(--accent); color:var(--text-primary); }
 .hist-tab.on { background:var(--accent); border-color:var(--accent); color:var(--bg-primary); }
+.hist-curiosity { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:.6rem .8rem; margin-bottom:.9rem; font-size:.85rem; color:var(--text-secondary); }
+.hist-curiosity strong { color:var(--text-primary); }
 .hist-chips { display:flex; gap:.3rem; flex-wrap:wrap; margin-bottom:.6rem; }
 .hist-chips .chip { padding:.25rem .55rem; font-size:.72rem; }
 .hist-chips .chip.on { background:var(--accent); border-color:var(--accent); color:var(--bg-primary); }
@@ -428,8 +430,8 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .chip .x:hover { opacity:1; color:var(--bad); }
 .now-loc-row { display:flex; align-items:flex-start; gap:.5rem; margin-bottom:.15rem; flex-wrap:wrap; }
 .now-loc-row .grow { flex:1; min-width:55%; }
-.now-actions { display:flex; gap:.4rem; flex-shrink:0; margin-left:auto; }
-.icon-btn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:.4rem .7rem; font-size:.8rem; font-weight:600; cursor:pointer; line-height:1; transition:all .15s; white-space:nowrap; }
+.now-actions { display:flex; flex-wrap:wrap; gap:.4rem; min-width:0; margin-left:auto; }
+.icon-btn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:.4rem .7rem; font-size:.8rem; font-weight:600; cursor:pointer; line-height:1; transition:all .15s; white-space:nowrap; flex-shrink:0; }
 .icon-btn:hover { color:var(--text-primary); border-color:var(--accent); }
 .icon-btn.on { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.12); }
 .now-fresh { color:var(--accent); font-weight:600; }
@@ -540,7 +542,7 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 const BUILD_DATE  = '2026-09-15';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -810,6 +812,37 @@ function windName(deg){
   const names=['Tramuntana','Gregal','Llevant','Xaloc','Migjorn','Garbí','Ponent','Mestral'];
   return names[Math.round(deg/45)%8];
 }
+/* Fase lunar: càlcul astronòmic local (cicle sinòdic des d'una lluna nova coneguda),
+   sense cap crida a cap API. Prou precís per a una etiqueta, no per navegació. */
+function moonPhaseFrac(date){
+  const SYNODIC=29.530588853, KNOWN_NEW=Date.UTC(2000,0,6,18,14,0);
+  let f=((date.getTime()-KNOWN_NEW)/864e5 % SYNODIC)/SYNODIC;
+  if(f<0) f+=1;
+  return f;
+}
+function moonPhaseLabel(date){
+  const p=moonPhaseFrac(date);
+  const steps=[[0.033,'🌑 Nova'],[0.216,'🌒 Creixent'],[0.283,'🌓 Quart creixent'],[0.467,'🌔 Gibosa creixent'],
+    [0.533,'🌕 Plena'],[0.717,'🌖 Gibosa minvant'],[0.783,'🌗 Quart minvant'],[0.967,'🌘 Minvant'],[1,'🌑 Nova']];
+  for(const [thr,label] of steps) if(p<thr) return label;
+  return '🌑 Nova';
+}
+/* Durada del dia (llum de sol) segons la latitud, per una fórmula astronòmica estàndard
+   (declinació solar aproximada). Serveix per comparar-la amb la d'ahir; no substitueix
+   la sortida/posta reals que ja arriben d'Open-Meteo. */
+function dayLengthMinutes(lat, date){
+  const rad=Math.PI/180;
+  const start=Date.UTC(date.getUTCFullYear(),0,0);
+  const dayOfYear=Math.floor((date.getTime()-start)/864e5);
+  const decl=23.44*Math.sin(rad*(360/365)*(dayOfYear-81));
+  const cosH=Math.max(-1, Math.min(1, -Math.tan(lat*rad)*Math.tan(decl*rad)));
+  return 2*Math.acos(cosH)*180/Math.PI/15*60;
+}
+function dayLightDeltaLabel(lat, now){
+  const diff=Math.round(dayLengthMinutes(lat, now) - dayLengthMinutes(lat, new Date(now.getTime()-864e5)));
+  if(diff===0) return 'Igual que ahir';
+  return `${diff>0?'+':''}${diff} min respecte ahir`;
+}
 function showStatus(html, kind){ const s=$('status'); s.className=kind||''; s.innerHTML=html; s.style.display=(kind?'block':'none'); }
 function hideStatus(){ const s=$('status'); s.className=''; s.style.display='none'; }
 
@@ -880,6 +913,64 @@ function shareCurrent(){
   else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>{ const b=$('shareBtn'); if(b){ const o=b.textContent; b.textContent='✓ Copiat'; setTimeout(()=>b.textContent=o,1500); } }); }
 }
 
+/* Dibuixa un resum del dia en un <canvas> i el comparteix com a imatge (o el
+   descarrega si el navegador no permet compartir fitxers). Tot es genera al
+   dispositiu: cap dada surt cap a cap servidor, només s'usa el que ja hi ha
+   carregat de currentFc. */
+async function shareImage(){
+  if(!currentLoc || !currentFc?.daily) return;
+  const btn=$('shareImgBtn'); const orig=btn?.textContent;
+  try{
+    const d=currentFc.daily, c=currentFc.current;
+    const [icon, desc]=wmo(d.weather_code[0]);
+    const tmax=Math.round(d.temperature_2m_max[0]), tmin=Math.round(d.temperature_2m_min[0]);
+    const now=new Date(c.time);
+    const sub=`${DAYS[now.getDay()]}, ${now.getDate()} de ${MONTHS_FULL[now.getMonth()]}`;
+
+    const W=1080, H=1080;
+    const canvas=document.createElement('canvas'); canvas.width=W; canvas.height=H;
+    const ctx=canvas.getContext('2d');
+    const g=ctx.createLinearGradient(0,0,W,H);
+    g.addColorStop(0,'#0b1929'); g.addColorStop(1,'#15314d');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    ctx.textAlign='center';
+    ctx.fillStyle='#8da9c0'; ctx.font='500 34px sans-serif';
+    ctx.fillText('El Temps', W/2, 110);
+    ctx.fillStyle='#e8f1f8'; ctx.font='700 58px sans-serif';
+    ctx.fillText(currentLoc.name, W/2, 190);
+    ctx.fillStyle='#8da9c0'; ctx.font='400 32px sans-serif';
+    ctx.fillText(sub, W/2, 240);
+
+    ctx.font='260px sans-serif';
+    ctx.fillText(icon, W/2, 560);
+
+    ctx.fillStyle='#e8f1f8'; ctx.font='700 46px sans-serif';
+    ctx.fillText(desc, W/2, 650);
+
+    ctx.font='700 100px sans-serif';
+    ctx.fillStyle='#fb923c'; ctx.textAlign='right'; ctx.fillText(`${tmax}°`, W/2-10, 810);
+    ctx.fillStyle='#60a5fa'; ctx.textAlign='left'; ctx.fillText(`${tmin}°`, W/2+10, 810);
+
+    ctx.textAlign='center'; ctx.fillStyle='#8da9c0'; ctx.font='400 28px sans-serif';
+    ctx.fillText('oscarbellosido.github.io/ElTemps', W/2, 1010);
+
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));
+    if(!blob) throw new Error('canvas buit');
+    const file=new File([blob], `eltemps-${currentLoc.name}.png`, { type:'image/png' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({ files:[file], title:'El Temps · '+currentLoc.name, text:`${currentLoc.name}: ${desc.toLowerCase()}, ${tmin}–${tmax}°C` });
+    } else {
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=`eltemps-${currentLoc.name}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    }
+  }catch(e){
+    if(e?.name!=='AbortError' && btn){ btn.textContent='✗ No disponible'; setTimeout(()=>btn.textContent=orig,1500); }
+  }
+}
+
 /* ── Avisos al mòbil (notificacions push) ────────────────────────────────────
    El navegador crea una "subscripció": una adreça secreta per avisar AQUEST
    telèfon. Es copia un sol cop al secret PUSH_SUBS del repositori, i la tasca
@@ -896,7 +987,7 @@ function updateNotifBtn(){
   b.textContent = notifOn() ? '🔔 Avisos actius' : '🔔 Avisa\'m';
   b.classList.toggle('on', notifOn());
   b.title = notifOn() ? 'Avisos activats en aquest telèfon — toca per apagar-los'
-                      : 'Rebre avisos de calor forta, pluja o vent fort en aquest telèfon';
+                      : 'Rebre avisos de calor forta, tempesta, pluja o vent fort en aquest telèfon';
 }
 /* base64url → bytes: el format que demana applicationServerKey */
 function b64ToU8(s){
@@ -981,7 +1072,7 @@ function showNotifDialog(payload, state, msg){
         <li>A <strong>Secret</strong> enganxa el text copiat.</li>
         <li>Prem <strong>Add secret</strong>. Ja està.</li>
       </ol>
-      <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta, pluja o vent fort a punt d'arribar.
+      <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta, tempesta, pluja o vent fort a punt d'arribar.
       Si ja tenies un altre telèfon donat d'alta, edita el secret i afegeix-hi aquest, separat per una coma.
       <br><br>Pots tornar a prémer <strong>🔔</strong> quan vulguis per recuperar aquest text: no apaga res.</p>
       <button class="notif-off" onclick="disableNotif()">Desactivar els avisos en aquest telèfon</button>`;
@@ -1450,13 +1541,14 @@ function renderSummary(loc, fc, models, air){
   const nowIso = c.time.slice(0,13);
   let start = h.time.findIndex(t => t.slice(0,13) === nowIso); if(start<0) start=0;
   const todayDate = c.time.slice(0,10);
-  const rainHours=[];
+  const rainHours=[], stormHours=[];
   let maxProbRest=0;
   for(let i=start;i<h.time.length;i++){
     if(h.time[i].slice(0,10) !== todayDate) break;        // només la resta d'avui
     const p = h.precipitation_probability[i]??0;
     maxProbRest = Math.max(maxProbRest, p);
     if(p >= 40) rainHours.push(i);
+    if([95,96,99].includes(h.weather_code?.[i])) stormHours.push(i);   // codis WMO de tempesta
   }
   if(c.precipitation > 0) txt += ` <strong>Ara mateix plou.</strong>`;
   if(rainHours.length){
@@ -1502,6 +1594,20 @@ function renderSummary(loc, fc, models, air){
   if(tmin<=3)  tags.push(['🧥 Fred: abriga\'t','warn']);
   if(uv>=7)    tags.push([`🧴 UV alt (${r1(uv)}): protecció`,'warn']);
   if(gust>=50) tags.push([`💨 Ratxes fortes de ${windName(windDeg??0)}`,'warn']);
+  if(stormHours.length){
+    const sp = groupRanges(stormHours).map(([a,b]) =>
+      a===b ? `cap a les ${hourLabel(h.time[a])}` : `entre les ${hourLabel(h.time[a])} i les ${hourLabel(h.time[b])}`);
+    tags.push([`⛈️ Possible tempesta elèctrica ${sp.join(' i ')}`,'warn']);
+  }
+
+  // Onada de calor o de fred: mira si els propers dies (fins a 7) segueixen sobre/sota
+  // el llindar a partir d'avui. No hi ha dades del passat aquí (això és la previsió),
+  // així que és "quants dies MÉS", no "quants portem ja".
+  { let hn=0; for(let i=0;i<d.temperature_2m_max.length;i++){ if(d.temperature_2m_max[i]>=35) hn++; else break; }
+    if(hn>=3) tags.push([`🥵 Onada de calor: ${hn} dies seguits ≥35°`,'warn']);
+    let cn=0; for(let i=0;i<d.temperature_2m_min.length;i++){ if(d.temperature_2m_min[i]<=0) cn++; else break; }
+    if(cn>=3) tags.push([`🧊 Onada de fred: ${cn} dies seguits sota zero`,'warn']);
+  }
 
   // Nivell de contaminació (qualitat de l'aire)
   if(air?.current?.european_aqi!=null){
@@ -1530,6 +1636,7 @@ function renderSummary(loc, fc, models, air){
       <div class="now-actions">
         <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
         <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
+        <button id="shareImgBtn" class="icon-btn" onclick="shareImage()" title="Comparteix com a imatge">🖼️ Imatge</button>
         <button id="notifBtn" class="icon-btn" onclick="toggleNotif()" title="Avisos al mòbil">🔔 Avisa'm</button>
       </div>
     </div>
@@ -1716,6 +1823,8 @@ function renderNow(loc, fc){
     ['🔆 UV màx', `${r1(fc.daily?.uv_index_max?.[0]??0)}`],
     ['🌅 Sortida', sunrise||'—'],
     ['🌇 Posta', sunset||'—'],
+    ['🌙 Lluna', moonPhaseLabel(now)],
+    ['☀️ Llum del dia', dayLightDeltaLabel(loc.lat, now)],
   ].map(([l,v])=>`<div class="stat"><div class="lbl">${l}</div><div class="val">${v}</div></div>`).join('');
 
   return `<div class="now-hero">
@@ -2773,12 +2882,17 @@ function paintHist(){
   const tabs=[['year','Enguany'],['trend',`Des del ${HIST_Y0}`],['month','Un mes, any a any']];
   const nav=`<div class="hist-tabs" role="tablist">${tabs.map(([k,l])=>
     `<button class="hist-tab${histView===k?' on':''}" role="tab" aria-selected="${histView===k}" onclick="setHistView('${k}')">${l}</button>`).join('')}</div>`;
+  // Curiositat: normal del mes en curs, amb les mateixes dades que ja s'han carregat
+  // per a aquesta targeta (cap crida nova).
+  const curMonth=new Date().getMonth(), cnT=d.nor.t[curMonth], cnP=d.nor.p[curMonth];
+  const curiosity = cnT!=null
+    ? `<div class="hist-curiosity">💡 Al ${MONTHS_FULL[curMonth]}, de mitjana des del ${NORM_Y0}, fan <strong>${r1(cnT)}°C</strong> i cauen <strong>${Math.round(cnP??0)} mm</strong>.</div>` : '';
   let inner='';
   try{
     inner = histView==='year' ? histViewYear(d) : histView==='trend' ? histViewTrend(d) : histViewMonth(d);
   }catch(e){ console.error('hist', e); inner=`<div class="out-skel">No s'ha pogut dibuixar aquesta vista.</div>`; }
   const dist = d.grid ? kmBetween(d.loc.lat, d.loc.lon, d.grid.lat, d.grid.lon) : null;
-  body.innerHTML = nav + inner + `<div class="card-note">Font: reanàlisi <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener">ERA5 (ECMWF)</a>
+  body.innerHTML = nav + curiosity + inner + `<div class="card-note">Font: reanàlisi <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener">ERA5 (ECMWF)</a>
     via Open-Meteo, des del ${HIST_Y0}${d.upto?` fins al ${d.upto.slice(8,10)}/${d.upto.slice(5,7)}/${d.upto.slice(0,4)}`:''}.
     ${dist!=null && dist>=3 ? `Són dades de la casella de graella més propera, a ${Math.round(dist)} km d'aquí. ` : ''}
     Una reanàlisi reconstrueix el temps passat amb un model i totes les observacions disponibles: la temperatura
@@ -3293,7 +3407,7 @@ function showWelcome(){
       <li>🌧️ <strong>Radar de pluja</strong> — de les últimes dues hores fins a sis hores endavant, per veure cap on va la tempesta</li>
       <li>🔮 <strong>Mesos vinents</strong> i 📜 <strong>clima des del 1940</strong> — tendència estacional i 86 anys d'històric real, mes a mes</li>
       <li>⚠️ <strong>Avisos oficials</strong> — alertes de Meteoalarm i AEMET en temps real</li>
-      <li>🔔 <strong>Avisos al mòbil</strong> — calor forta, pluja o vent fort a punt d'arribar, encara amb l'app tancada</li>
+      <li>🔔 <strong>Avisos al mòbil</strong> — calor forta, tempesta, pluja o vent fort a punt d'arribar, encara amb l'app tancada</li>
       <li>🔗 <strong>Favorits i compartir</strong> — desa els teus llocs i comparteix el resum del dia amb un sol toc</li>
       <li>📵 <strong>Mode sense connexió</strong> — mostra l'última dada coneguda si no hi ha xarxa</li>
     </ul>

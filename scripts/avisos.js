@@ -5,16 +5,15 @@
    L'executa .github/workflows/avisos.yml un cop cada hora.
 
    Què fa: per cada telèfon donat d'alta al secret PUSH_SUBS, mira el temps del
-   seu poble i, si hi ha calor forta, pluja a punt de caure o vent fort a punt
-   d'arribar, li envia un avís. El mòbil el mostra encara que l'app estigui
+   seu poble i, si hi ha calor forta, tempesta elèctrica, pluja o vent fort a
+   punt d'arribar, li envia un avís. El mòbil el mostra encara que l'app estigui
    tancada, i el rellotge (Wear OS) el repeteix al canell tot sol.
 
    PER QUÈ NO CAL RECORDAR QUÈ S'HA ENVIAT: no es desa cap estat enlloc. Perquè
    no arribin avisos repetits, cada regla només pot disparar en un moment concret:
      · La calor només s'avisa al matí (una vegada al dia, entre les 7 i les 9).
-     · La pluja només s'avisa si encara NO plou; quan comença a ploure, la
-       condició deixa de complir-se tota sola.
-     · El vent fort funciona igual que la pluja: només si ara encara no en fa.
+     · La tempesta, la pluja i el vent fort només s'avisen si encara NO hi són;
+       quan comencen, la condició deixa de complir-se tota sola.
    ════════════════════════════════════════════════════════════════════════════ */
 const webpush = require('web-push');
 
@@ -31,7 +30,9 @@ const HEAT_DANGER   = 40;   // a partir d'aquí, avís més seriós
 const RAIN_MIN_PROB = 60;   // % de probabilitat per avisar de pluja
 const WIND_GUST_MIN  = 50;  // ratxes (km/h) a partir de les quals s'avisa de vent (rèplica d'index.html)
 const WIND_SPEED_MIN = 35;  // vent mitjà (km/h) a partir del qual s'avisa (rèplica d'index.html)
+const STORM_CODES    = [95, 96, 99];  // codis WMO de tempesta (mateixos que la taula WMO d'index.html)
 const HEAT_HOURS    = [7, 8, 9];    // hores locals en què es pot avisar de calor
+const STORM_HOURS   = [7, 22];      // franja local en què es pot avisar de tempesta
 const RAIN_HOURS    = [7, 22];      // franja local en què es pot avisar de pluja
 const WIND_HOURS    = [7, 22];      // franja local en què es pot avisar de vent (igual que la pluja)
 
@@ -52,7 +53,7 @@ function parseSubs(raw) {
 async function forecast(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
     + `&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m`
-    + `&hourly=temperature_2m,apparent_temperature,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m`
+    + `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m`
     + `&timezone=auto&forecast_days=2`;
   const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error('Open-Meteo ha respost ' + r.status);
@@ -119,6 +120,20 @@ function windSoon(fc) {
   return best;
 }
 
+/* Tempesta elèctrica a punt d'arribar: les properes 3 h, i només si ara encara
+   no hi som (mateix criteri que rainSoon/windSoon). */
+function stormSoon(fc) {
+  const h = fc.hourly, c = fc.current, s = nowIndex(fc);
+  if (s < 0) return null;
+  if (STORM_CODES.includes(c.weather_code)) return null;   // ja hi som: no cal avisar
+  for (let i = s; i < Math.min(s + 3, h.time.length); i++) {
+    if (STORM_CODES.includes(h.weather_code?.[i])) {
+      return { hour: parseInt(h.time[i].slice(11, 13), 10) };
+    }
+  }
+  return null;
+}
+
 /* Rosa dels vents catalana. Rèplica de windName() de index.html: si en canvies
    una, canvia l'altra, o l'avís i la pantalla diran noms diferents. */
 function windName(deg) {
@@ -161,6 +176,16 @@ function buildMessage(fc, sub) {
         ? `Avui s'arribarà als ${Math.round(heat.v)}° cap a les ${heat.hour}h. Evita sortir entre les 12h i les 17h i beu aigua sovint.`
         : `Avui s'arribarà als ${Math.round(heat.v)}° cap a les ${heat.hour}h. Beu aigua i busca l'ombra a les hores centrals.`,
       tag: 'calor',
+      url: linkFor(sub)
+    };
+  }
+
+  const storm = stormSoon(fc);
+  if (storm && localHour >= STORM_HOURS[0] && localHour < STORM_HOURS[1]) {
+    return {
+      title: `⛈️ Tempesta elèctrica${where}`,
+      body: `Es preveu tempesta cap a les ${storm.hour}h. Si ets fora, busca aixopluc.`,
+      tag: 'tempesta',
       url: linkFor(sub)
     };
   }
@@ -233,4 +258,4 @@ if (require.main === module) {
   main().catch(e => { console.error('Error inesperat:', e); process.exit(1); });
 }
 
-module.exports = { buildMessage, heatPeak, rainSoon, windSoon, windName, nowIndex };
+module.exports = { buildMessage, heatPeak, rainSoon, windSoon, stormSoon, windName, nowIndex };
