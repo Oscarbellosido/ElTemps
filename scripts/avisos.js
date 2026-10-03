@@ -2,19 +2,29 @@
 /* ════════════════════════════════════════════════════════════════════════════
    El Temps — avisos al mòbil
    ════════════════════════════════════════════════════════════════════════════
-   L'executa .github/workflows/avisos.yml un cop cada hora.
+   L'executa .github/workflows/avisos.yml cada 15 minuts (el "despertador" de
+   Cloudflare, scripts/despertador-avisos.js) i, de reserva, la programació
+   horària de GitHub, que en realitat només arriba a passar unes 5 vegades al dia.
 
    Què fa: per cada telèfon donat d'alta al secret PUSH_SUBS, mira el temps del
    seu poble i, si hi ha calor forta, tempesta elèctrica, pluja o vent fort a
    punt d'arribar, li envia un avís. El mòbil el mostra encara que l'app estigui
    tancada, i el rellotge (Wear OS) el repeteix al canell tot sol.
 
-   PER QUÈ NO CAL RECORDAR QUÈ S'HA ENVIAT: no es desa cap estat enlloc. Perquè
-   no arribin avisos repetits, cada regla només pot disparar en un moment concret:
-     · La calor només s'avisa al matí (una vegada al dia, entre les 7 i les 9).
-     · La tempesta, la pluja i el vent fort només s'avisen si encara NO hi són;
-       quan comencen, la condició deixa de complir-se tota sola.
+   COM S'EVITEN ELS AVISOS REPETITS: com que passa tan sovint, cal recordar què
+   s'ha enviat. Es desa en un fitxer petit (ESTAT, per defecte estat-avisos.json)
+   que el workflow guarda a la memòria cau d'Actions entre una passada i l'altra:
+     · La calor s'avisa un sol cop al dia, el primer cop que passa entre les 7 i
+       les 12 (abans, si GitHub no passava entre les 7 i les 9, no avisava).
+     · La tempesta, la pluja i el vent fort només s'avisen si encara NO hi són i
+       no se n'ha avisat en les últimes COOLDOWN_H hores. Si s'acaba d'avisar
+       d'una tempesta, la pluja no s'avisa a part (ja ve amb la tempesta).
+   El fitxer no porta ni noms ni adreces dels telèfons: només un resum (hash) de
+   cada subscripció i quan se li ha enviat cada tipus d'avís. Si es perd, l'únic
+   que passa és que un avís es pot repetir una vegada.
    ════════════════════════════════════════════════════════════════════════════ */
+const fs = require('fs');
+const crypto = require('crypto');
 const webpush = require('web-push');
 
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC || '';
@@ -23,6 +33,7 @@ const SUBS_RAW = process.env.PUSH_SUBS || '';
 /* Prova forçada des de la pestanya Actions. GitHub passa les caselles com a text. */
 const PROVA = /^(true|1)$/i.test((process.env.PROVA || '').trim());
 const SITE = 'https://oscarbellosido.github.io/ElTemps/';
+const ESTAT = process.env.ESTAT || 'estat-avisos.json';
 
 /* Llindars. Si algun dia et sembla que avisa massa (o massa poc), es toquen aquí. */
 const HEAT_MIN      = 35;   // graus a partir dels quals s'avisa de calor
@@ -31,10 +42,11 @@ const RAIN_MIN_PROB = 60;   // % de probabilitat per avisar de pluja
 const WIND_GUST_MIN  = 50;  // ratxes (km/h) a partir de les quals s'avisa de vent (rèplica d'index.html)
 const WIND_SPEED_MIN = 35;  // vent mitjà (km/h) a partir del qual s'avisa (rèplica d'index.html)
 const STORM_CODES    = [95, 96, 99];  // codis WMO de tempesta (mateixos que la taula WMO d'index.html)
-const HEAT_HOURS    = [7, 8, 9];    // hores locals en què es pot avisar de calor
+const HEAT_HOURS    = [7, 12];      // franja local en què es pot avisar de calor (un cop al dia)
 const STORM_HOURS   = [7, 22];      // franja local en què es pot avisar de tempesta
 const RAIN_HOURS    = [7, 22];      // franja local en què es pot avisar de pluja
 const WIND_HOURS    = [7, 22];      // franja local en què es pot avisar de vent (igual que la pluja)
+const COOLDOWN_H    = 3;            // hores sense repetir un avís de tempesta, pluja o vent
 
 function log(...a) { console.log(...a); }
 
@@ -145,8 +157,17 @@ function linkFor(sub) {
   return `${SITE}?lat=${sub.lat}&lon=${sub.lon}&name=${encodeURIComponent(sub.name || '')}`;
 }
 
-/* Decideix si toca avisar. Torna null quan no hi ha res a dir. */
-function buildMessage(fc, sub) {
+/* Ja s'ha avisat d'això fa menys de COOLDOWN_H hores? `sent` és el que recordem
+   d'aquest telèfon: { calor:'AAAA-MM-DD', tempesta:ms, pluja:ms, vent:ms }. */
+function recent(sent, tag, nowMs) {
+  const t = sent?.[tag];
+  return typeof t === 'number' && nowMs - t < COOLDOWN_H * 3600e3;
+}
+const inHours = (h, [from, to]) => h >= from && h < to;
+
+/* Decideix si toca avisar. Torna null quan no hi ha res a dir.
+   `sent` (opcional) és el que ja s'ha enviat a aquest telèfon; sense, no es filtra res. */
+function buildMessage(fc, sub, sent = {}, nowMs = Date.now()) {
   // Mode de prova: forçat des de la pestanya Actions marcant la casella "prova".
   // Serveix per comprovar que l'avís arriba al mòbil i al rellotge sense haver
   // d'esperar que faci calor de debò.
@@ -168,8 +189,10 @@ function buildMessage(fc, sub) {
   const localHour = parseInt(fc.current.time.slice(11, 13), 10);
   const where = sub.name ? ` a ${sub.name}` : '';
 
+  const today = fc.current.time.slice(0, 10);   // data local, del text d'Open-Meteo
+
   const heat = heatPeak(fc);
-  if (heat && HEAT_HOURS.includes(localHour)) {
+  if (heat && inHours(localHour, HEAT_HOURS) && sent.calor !== today) {
     return {
       title: `${heat.danger ? '🥵' : '⚠️'} ${heat.danger ? 'Calor perillosa' : 'Calor extrema'}${where}`,
       body: heat.danger
@@ -181,7 +204,7 @@ function buildMessage(fc, sub) {
   }
 
   const storm = stormSoon(fc);
-  if (storm && localHour >= STORM_HOURS[0] && localHour < STORM_HOURS[1]) {
+  if (storm && inHours(localHour, STORM_HOURS) && !recent(sent, 'tempesta', nowMs)) {
     return {
       title: `⛈️ Tempesta elèctrica${where}`,
       body: `Es preveu tempesta cap a les ${storm.hour}h. Si ets fora, busca aixopluc.`,
@@ -191,7 +214,7 @@ function buildMessage(fc, sub) {
   }
 
   const rain = rainSoon(fc);
-  if (rain && localHour >= RAIN_HOURS[0] && localHour < RAIN_HOURS[1]) {
+  if (rain && inHours(localHour, RAIN_HOURS) && !recent(sent, 'pluja', nowMs) && !recent(sent, 'tempesta', nowMs)) {
     return {
       title: `🌧️ Pluja${where}`,
       body: rain.hour != null
@@ -203,7 +226,7 @@ function buildMessage(fc, sub) {
   }
 
   const wind = windSoon(fc);
-  if (wind && localHour >= WIND_HOURS[0] && localHour < WIND_HOURS[1]) {
+  if (wind && inHours(localHour, WIND_HOURS) && !recent(sent, 'vent', nowMs)) {
     return {
       title: `💨 Vent fort${where}`,
       body: `Cap a les ${wind.hour}h bufarà ${windName(wind.dir)}, amb ratxes de fins a ${Math.round(wind.gust)} km/h.`,
@@ -215,7 +238,37 @@ function buildMessage(fc, sub) {
   return null;
 }
 
+/* ── Memòria del que s'ha enviat ─────────────────────────────────────────────── */
+function subKey(sub) {
+  return crypto.createHash('sha256').update(sub.endpoint).digest('hex').slice(0, 16);
+}
+function loadState() {
+  try {
+    const j = JSON.parse(fs.readFileSync(ESTAT, 'utf8'));
+    return (j && typeof j.s === 'object' && j.s) || {};
+  } catch { return {}; }   // primer cop, o fitxer perdut: es comença de zero
+}
+function saveState(state) {
+  // Fora el que ja no pot fer de res (més de 3 dies) perquè el fitxer no creixi.
+  const lim = Date.now() - 3 * 864e5, limDia = new Date(lim).toISOString().slice(0, 10);
+  for (const k of Object.keys(state)) {
+    const e = state[k];
+    for (const t of Object.keys(e)) {
+      if (typeof e[t] === 'number' ? e[t] < lim : String(e[t]) < limDia) delete e[t];
+    }
+    if (!Object.keys(e).length) delete state[k];
+  }
+  try { fs.writeFileSync(ESTAT, JSON.stringify({ v: 1, s: state })); }
+  catch (e) { log('No s\'ha pogut desar què s\'ha enviat: ' + e.message); }
+}
+
 async function main() {
+  const state = loadState();
+  try { await run(state); }
+  finally { saveState(state); }   // sempre, perquè el workflow el pugui guardar
+}
+
+async function run(state) {
   if (!VAPID_PRIVATE) { log('Falta el secret VAPID_PRIVATE_KEY. No es fa res.'); return; }
   if (!SUBS_RAW)      { log('Falta el secret PUSH_SUBS: encara no hi ha cap telèfon donat d\'alta. No es fa res.'); return; }
 
@@ -229,12 +282,18 @@ async function main() {
     const who = sub.name || sub.endpoint.slice(-12);
     try {
       const fc = await forecast(sub.lat, sub.lon);
-      const msg = buildMessage(fc, sub);
+      const key = subKey(sub), mem = state[key] || {};
+      const msg = buildMessage(fc, sub, mem);
       if (!msg) { log(`· ${who}: res a avisar.`); quiet++; continue; }
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: sub.keys },
         JSON.stringify(msg)
       );
+      // Només es recorda un cop enviat de debò (i les proves no compten).
+      if (!PROVA) {
+        mem[msg.tag] = msg.tag === 'calor' ? fc.current.time.slice(0, 10) : Date.now();
+        state[key] = mem;
+      }
       log(`✓ ${who}: enviat → ${msg.title} — ${msg.body}`);
       sent++;
     } catch (e) {
@@ -248,7 +307,7 @@ async function main() {
     }
   }
   log(`Resum: ${sent} enviat(s), ${quiet} sense novetat, ${failed} amb error.`);
-  // No es falla la tasca per un avís no entregat: no volem correus d'error cada hora.
+  // No es falla la tasca per un avís no entregat: no volem correus d'error a cada passada.
 }
 
 // require.main !== module quan es carrega des d'una prova (p.ex. `require('./avisos.js')`)

@@ -36,8 +36,9 @@ ElTemps/
 ├── data/zones-avis-es.json  ← contorn de cada zona d'avís d'AEMET (per EMMA_ID), ~120 KB
 ├── scripts/avisos.js        ← Node: decideix i envia els avisos push (només s'executa a Actions)
 ├── scripts/zones-avis.js    ← Node, a mà: regenera data/zones-avis-es.json (vegeu §7)
+├── scripts/despertador-avisos.js ← Cloudflare Worker (no s'executa aquí): llança avisos.yml cada 15 min
 ├── .github/workflows/
-│   ├── avisos.yml           ← cada hora: executa scripts/avisos.js
+│   ├── avisos.yml           ← cada 15 min (despertador) + horari de reserva: scripts/avisos.js
 │   └── mantenir-viu.yml     ← cada dilluns: commit buit si fa ≥50 dies que no es toca el repo
 ├── README.md                ← documentació per a l'usuari (en català)
 └── CLAUDE.md                ← aquest fitxer
@@ -258,15 +259,27 @@ Peça per peça:
 | Botó **🔔 Avisa'm** (`toggleNotif`) | crea la subscripció i mostra el text per enganxar al secret |
 | Secret `PUSH_SUBS` | llista JSON de telèfons donats d'alta (nom, lat, lon, endpoint, keys) |
 | Secret `VAPID_PRIVATE_KEY` | signa els enviaments |
-| `.github/workflows/avisos.yml` | cada hora (i a mà, amb casella **prova**) |
+| `.github/workflows/avisos.yml` | cada 15 min via `workflow_dispatch` del despertador, horari de reserva, i a mà (casella **prova**) |
+| `scripts/despertador-avisos.js` | Cloudflare Worker amb Cron Trigger `*/15`; secret `GH_TOKEN` (token fine-grained, només *Actions: Read and write* sobre ElTemps) |
 | `scripts/avisos.js` | mira el temps de cada telèfon i decideix si cal avisar |
 | `sw.js` (esdeveniment `push`) | mostra la notificació del sistema |
 
-**No es desa cap estat d'enviament.** Per evitar repeticions, cada regla només pot disparar
-en una finestra: la calor entre les 7 i les 9 hores locals (`HEAT_HOURS`), i la tempesta, la
-pluja i el vent fort només si encara no hi són i entre les 7 i les 22 h (`STORM_HOURS`,
-`RAIN_HOURS`, `WIND_HOURS`). Si canvies aquesta lògica, pensa primer com evites l'avís
-repetit cada hora.
+**Per què el despertador.** El `schedule` de GitHub (cron horari) a la pràctica només passava
+~5 cops al dia (vist als registres de set.–oct. 2026). Un `workflow_dispatch` llançat des de
+fora s'executa a l'instant; per això el Worker de Cloudflare el crida cada 15 minuts. El
+`schedule` es manté de reserva. El token del Worker **no ha d'aparèixer mai al repositori**.
+
+**Memòria d'enviaments.** Com que passa cada 15 minuts, `avisos.js` recorda què ha enviat en
+`estat-avisos.json` (variable `ESTAT`), que el workflow recupera i desa amb
+`actions/cache/restore` i `actions/cache/save` (clau `avisos-estat-<run_id>`; no cal cap
+permís d'escriptura al repositori). Format: `{v:1, s:{<sha256(endpoint) 16 hex>:{calor:'AAAA-MM-DD',
+tempesta:ms, pluja:ms, vent:ms}}}`. **Res de noms, coordenades ni endpoints**: la cache d'un
+repositori públic la pot llegir un workflow de PR. Regles: calor un cop per dia local dins de
+`HEAT_HOURS` (7–12 h); tempesta, pluja i vent només si encara no hi són, dins de 7–22 h, i no
+més d'un cop cada `COOLDOWN_H` (3 h); la pluja tampoc si s'acaba d'avisar de tempesta. Les
+proves (`PROVA`) no es recorden. `buildMessage(fc, sub, sent, nowMs)` rep la memòria del
+telèfon com a paràmetre opcional, així es pot provar sense fitxers. Si el fitxer es perd, el
+pitjor que passa és un avís repetit una vegada; si canvies aquesta lògica, mantingues-ho així.
 
 ⚠️ **Duplicació coneguda:** `heatPeak()` i `windName()` existeixen a `index.html` **i** a
 `scripts/avisos.js`, amb els mateixos llindars (calor: 35 °C / 40 °C; vent: ratxes ≥ 50 km/h

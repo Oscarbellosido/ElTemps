@@ -1,16 +1,22 @@
 # Avisos del temps al mòbil.
-# S'executa sol cada hora i, si hi ha calor forta o pluja a punt de caure, envia
-# un avís als telèfons donats d'alta al secret PUSH_SUBS. La lògica és a
+# Mira el temps i, si hi ha calor forta, tempesta, pluja o vent fort a punt d'arribar,
+# envia un avís als telèfons donats d'alta al secret PUSH_SUBS. La lògica és a
 # scripts/avisos.js; aquí només es diu quan s'ha d'executar i amb quins secrets.
 #
-# Es pot llançar a mà des de la pestanya Actions (botó "Run workflow") per provar-ho
-# sense esperar-se a l'hora en punt.
+# QUAN S'EXECUTA:
+#   · Cada 15 minuts, el "despertador" de Cloudflare (scripts/despertador-avisos.js)
+#     la llança per l'API de GitHub (workflow_dispatch). És el que fa que els avisos
+#     arribin a temps.
+#   · De reserva, la programació horària de GitHub (schedule). Sola no n'hi ha prou:
+#     GitHub endarrereix i se salta tasques programades, i a la pràctica només
+#     passava unes 5 vegades al dia.
+#   · A mà, des de la pestanya Actions (botó "Run workflow"), per provar-ho.
 name: Avisos del temps
 
 on:
   schedule:
-    - cron: '0 * * * *'      # cada hora, en punt (hora UTC)
-  workflow_dispatch:          # i també a mà, des de la pestanya Actions
+    - cron: '0 * * * *'      # cada hora en punt (hora UTC), de reserva
+  workflow_dispatch:          # el despertador de Cloudflare i les proves a mà
     inputs:
       prova:
         description: 'Enviar un avís de prova ara mateix (encara que no faci calor ni hagi de ploure)'
@@ -40,6 +46,17 @@ jobs:
       - name: Instal·lar la llibreria d'enviament
         run: npm install --no-save --no-audit --no-fund web-push@3.6.7
 
+      # Què s'ha enviat últimament (per no repetir avisos). Es guarda a la memòria cau
+      # d'Actions, que no necessita cap permís d'escriptura al repositori. Si no hi és
+      # (primer cop, o s'ha perdut), es comença de zero.
+      - name: Recuperar què s'ha enviat
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: estat-avisos.json
+          key: avisos-estat-${{ github.run_id }}
+          restore-keys: avisos-estat-
+
       - name: Mirar el temps i avisar si cal
         env:
           # La clau pública no és cap secret: és la mateixa que hi ha a index.html.
@@ -47,4 +64,13 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           PUSH_SUBS: ${{ secrets.PUSH_SUBS }}
           PROVA: ${{ inputs.prova }}
+          ESTAT: estat-avisos.json
         run: node scripts/avisos.js
+
+      - name: Desar què s'ha enviat
+        if: always()
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: estat-avisos.json
+          key: avisos-estat-${{ github.run_id }}-${{ github.run_attempt }}

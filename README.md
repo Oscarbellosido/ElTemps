@@ -201,8 +201,9 @@ secret, separat per una coma.
 |---|---|
 | Botó **🔔 Avisa'm** a `index.html` | Demana permís i crea la subscripció del telèfon |
 | `sw.js` (esdeveniment `push`) | Rep l'avís i el mostra com a notificació del sistema |
-| `.github/workflows/avisos.yml` | Cada hora engega la comprovació (i es pot llançar a mà) |
+| `.github/workflows/avisos.yml` | Engega la comprovació (cada 15 min amb el despertador, i es pot llançar a mà) |
 | `scripts/avisos.js` | Mira el temps de cada telèfon i decideix si cal avisar |
+| `scripts/despertador-avisos.js` | Worker de Cloudflare que llança la comprovació cada 15 minuts |
 
 **Secrets que fa servir** (a *Settings → Secrets and variables → Actions*):
 
@@ -213,17 +214,22 @@ La clau **pública** sí que és al codi (a `index.html` i al workflow): és pú
 
 ### Quan avisa i quan calla
 
-Per no rebre l'avís repetit cada hora, **no es desa enlloc què s'ha enviat**. En comptes
-d'això, cada regla només pot disparar en un moment concret:
+La comprovació passa cada 15 minuts, així que cal recordar què s'ha enviat per no repetir
+l'avís. Es desa en un fitxer petit a la memòria cau de GitHub Actions (`estat-avisos.json`),
+**sense noms ni adreces dels telèfons**: només un resum de cada subscripció i l'hora de
+l'últim avís de cada tipus.
 
-- **Calor** (pic ≥ 35°, o ≥ 40° per a l'avís seriós): només entre les **7 i les 9 del matí**,
-  o sigui un cop al dia.
+- **Calor** (pic ≥ 35°, o ≥ 40° per a l'avís seriós): **un cop al dia**, la primera vegada
+  que passa entre les **7 i les 12 del matí**.
 - **Tempesta elèctrica** (codis WMO 95/96/99 en les properes 3 h): només **si encara no hi
-  som** — quan comença, la condició deixa de complir-se sola — i només entre les **7 i les 22 h**.
-- **Pluja** (≥ 60% de probabilitat en les properes 2 h): només **si encara no plou** — quan
-  comença, la condició deixa de complir-se sola — i només entre les **7 i les 22 h**.
+  som**, entre les **7 i les 22 h**, i no més d'un cop cada **3 hores**.
+- **Pluja** (≥ 60% de probabilitat en les properes 2 h): només **si encara no plou**, entre
+  les **7 i les 22 h**, no més d'un cop cada **3 hores**, i no si s'acaba d'avisar d'una
+  tempesta (ja porta la pluja).
 - **Vent fort** (ratxes ≥ 50 km/h, o mitjana ≥ 35 km/h, en les properes 3 h): només **si ara
-  encara no en fa** — mateix truc que la pluja — i només entre les **7 i les 22 h**.
+  encara no en fa**, entre les **7 i les 22 h**, i no més d'un cop cada **3 hores**.
+
+Si el fitxer es perdés, l'únic efecte seria que un avís podria arribar repetit una vegada.
 
 Els llindars són al principi de `scripts/avisos.js`, ben visibles, per si algun dia et
 sembla que avisa massa o massa poc.
@@ -233,6 +239,43 @@ sembla que avisa massa o massa poc.
 > diran coses diferents. Els codis de tempesta (`STORM_CODES`) són els mateixos codis WMO
 > que ja fa servir la taula `WMO` d'`index.html`; no cal duplicar-los perquè són un estàndard,
 > no un llindar que es pugui voler ajustar.
+
+### Que arribin a temps (el despertador de Cloudflare)
+
+La tasca té una programació "cada hora" de GitHub, però **GitHub endarrereix i se salta
+les tasques programades**: a la pràctica passava unes **5 vegades al dia**, a estones de 3
+a 7 hores. Un avís de pluja "en les properes 2 hores" arribava tard o no arribava, i molts
+dies no passava entre les 7 i les 9 per avisar de la calor.
+
+Per això hi ha un **despertador** a Cloudflare (el mateix compte del proxy `mecai`) que,
+cada 15 minuts, demana a GitHub que llanci la tasca ara mateix. Això GitHub sí que ho fa
+a l'instant. La programació de GitHub es queda de reserva: si el despertador fallés,
+els avisos continuarien sortint, però menys sovint.
+
+**Com es munta (un sol cop):**
+
+1. **Token de GitHub.** A GitHub: foto de perfil → **Settings** → **Developer settings** →
+   **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+   - Nom: `Despertador avisos El Temps`. Caducitat: la més llarga que deixi.
+   - **Repository access** → *Only select repositories* → `ElTemps`.
+   - **Permissions** → *Repository permissions* → **Actions: Read and write**. Res més.
+   - Prem **Generate token** i copia'l (comença per `github_pat_`). Només es veu un cop.
+2. **Worker a Cloudflare.** A dash.cloudflare.com: **Workers & Pages** → **Create** →
+   crea un Worker nou (el "Hello World" ja va bé), posa-li de nom `eltemps-despertador` i
+   prem **Deploy**. Després **Edit code**: esborra-ho tot, enganxa-hi el contingut de
+   `scripts/despertador-avisos.js` i torna a prémer **Deploy**.
+3. **El token, com a secret.** Al Worker: **Settings** → **Variables and Secrets** → **Add**
+   → tipus *Secret*, nom `GH_TOKEN`, valor el token del pas 1.
+4. **El rellotge.** Al Worker: **Settings** → **Trigger Events** (o *Triggers*) → **Cron
+   Triggers** → afegeix `*/15 * * * *` (vol dir "cada 15 minuts").
+
+**Per comprovar que va:** al cap de mitja hora, a la pestanya **Actions → Avisos del temps**
+hi han d'aparèixer passades cada 15 minuts. Si no n'hi ha, als registres del Worker de
+Cloudflare hi surt el motiu: `401` vol dir que el token ha caducat o no s'ha copiat bé, i
+`403` o `404`, que li falta el permís *Actions: Read and write*.
+
+> ⚠️ Quan caduqui el token, cal fer-ne un de nou (pas 1) i canviar el secret `GH_TOKEN`
+> (pas 3). Mentrestant els avisos no s'aturen: tornen a dependre de la programació de GitHub.
 
 ### Que no es desactivi sola
 
@@ -261,7 +304,8 @@ Resum: 0 enviat(s), 1 sense novetat, 0 amb error.
 ```
 
 Si surt `res a avisar` no és cap error: vol dir que ha mirat el temps i no hi havia
-res prou destacable, o que era fora de la franja horària de la regla.
+res prou destacable, que era fora de la franja horària de la regla, o que ja se n'havia
+avisat fa poc.
 
 ## 🔒 Seguretat (llegeix-ho abans d'editar `index.html`)
 
