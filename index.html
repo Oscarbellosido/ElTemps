@@ -542,8 +542,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.11.0';
-const BUILD_DATE  = '2026-09-15';
+const APP_VERSION = '1.11.1';
+const BUILD_DATE  = '2026-10-03';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1316,6 +1316,56 @@ async function revGeo(lat, lon, lang='ca'){
   if(!r.ok) return null; const j=await r.json(); const a=j.address||{};
   return { cc:(a.country_code||'').toUpperCase(), admin1:a.state||a.region, admin2:a.county||a.province||a.state_district, name:a.city||a.town||a.village||j.name };
 }
+/* Zones d'avís. AEMET no avisa per municipis sinó per zones, i cada província en té
+   diverses (Barcelona: Litoral, Prelitoral, Depressió central, Prepirineu i la franja de
+   mar). Si només miréssim el nom de la província, a Vic hi sortirien els avisos de totes
+   quatre. Al feed, cada zona porta el seu codi EMMA_ID (p. ex. ES179 = Depressió central
+   de Barcelona); amb el contorn de cada zona (data/zones-avis-es.json, generat amb
+   scripts/zones-avis.js) mirem si el punt hi cau a dins. El fitxer només es baixa per a
+   Espanya i un sol cop: després el serveix el service worker. Les zones que no hi són
+   (o els països sense fitxer) es continuen triant pel nom, com abans. */
+const ZONE_FILES = { ES:'data/zones-avis-es.json' };
+// Marge al voltant de cada zona: cobreix la simplificació dels contorns (~500 m) i, a les
+// zones de mar, fa que una ciutat de costa rebi els avisos d'onatge del seu tram de litoral.
+const ZONE_MARGIN_KM = { land:2, sea:8 };
+const zoneReqs = {};
+function loadZones(cc){
+  const f=ZONE_FILES[cc]; if(!f) return Promise.resolve(null);
+  if(!zoneReqs[cc]){
+    zoneReqs[cc]=fetch(f,{signal:AbortSignal.timeout(10000)})
+      .then(r=>r.ok ? r.json() : null).then(j=>(j && j.z) || null)
+      .catch(()=>null)
+      .then(z=>{ if(!z) delete zoneReqs[cc]; return z; });   // si ha fallat, es torna a provar la propera vegada
+  }
+  return zoneReqs[cc];
+}
+function areaEmma(a){
+  const gc=Array.isArray(a.geocode) ? a.geocode : (a.geocode ? [a.geocode] : []);
+  const g=gc.find(x=>/emma/i.test(x.valueName||''));
+  return g ? String(g.value||'').trim() : null;
+}
+/* Distància en km del punt a la zona (0 si hi és a dins). Es compten els encreuaments
+   sobre tots els anells d'un polígon, així els forats (enclavaments) queden fora. Per
+   distàncies d'uns quants km n'hi ha prou amb una projecció plana local. */
+function kmToZone(lat, lon, z, margin){
+  const kx=111.32*Math.cos(lat*Math.PI/180), ky=110.57, b=z.b;
+  if(lon<b[0]-margin/kx || lon>b[2]+margin/kx || lat<b[1]-margin/ky || lat>b[3]+margin/ky) return Infinity;
+  let best=Infinity;
+  for(const rings of z.p){
+    let inside=false;
+    for(const r of rings){
+      for(let i=0, j=r.length-2; i<r.length; j=i, i+=2){
+        const x1=r[j], y1=r[j+1], x2=r[i], y2=r[i+1];
+        if((y1>lat)!==(y2>lat) && lon<(x2-x1)*(lat-y1)/(y2-y1)+x1) inside=!inside;
+        const ax=(x1-lon)*kx, ay=(y1-lat)*ky, dx=(x2-x1)*kx, dy=(y2-y1)*ky, L=dx*dx+dy*dy;
+        const t=L ? Math.max(0, Math.min(1, -(ax*dx+ay*dy)/L)) : 0;
+        best=Math.min(best, Math.hypot(ax+t*dx, ay+t*dy));
+      }
+    }
+    if(inside) return 0;
+  }
+  return best;
+}
 async function loadAlerts(loc, gen){
   try{
     const named = loc.name && loc.name!=='La meva ubicació';
@@ -1338,7 +1388,10 @@ async function loadAlerts(loc, gen){
     const tokens=alertTokens({admin2, admin1, name:loc.name}).map(normTxt);
     if(!tokens.length) return;
 
-    const r=await fetch(proxyUrl(`https://feeds.meteoalarm.org/api/v1/warnings/feeds-${slug}`),{signal:AbortSignal.timeout(15000)});
+    const [r, zones]=await Promise.all([
+      fetch(proxyUrl(`https://feeds.meteoalarm.org/api/v1/warnings/feeds-${slug}`),{signal:AbortSignal.timeout(15000)}),
+      loadZones(cc)                      // mai falla: si no hi és, null i es tria pel nom
+    ]);
     if(!r.ok) return;
     const data=await r.json();
     const now=Date.now(); const found=[]; const seen=new Set();
@@ -1351,8 +1404,14 @@ async function loadAlerts(loc, gen){
       const langInfos = il ? infos.filter(i=>(i.language||'').toLowerCase().startsWith(il)) : infos;
       for(const info of langInfos){
         if(info.severity==='Minor') continue;               // descarta nivell verd (informatiu)
-        const areas=(info.area||[]).map(a=>a.areaDesc).filter(Boolean);
-        const matched=areas.filter(a=>{ const na=normTxt(a); return tokens.some(t=>na.includes(t)); });
+        // Zona amb contorn conegut → només si el punt hi cau (amb marge). Sense contorn
+        // → pel nom de la província/regió, com sempre.
+        const matched=(info.area||[]).filter(a=>{
+          const z=zones && zones[areaEmma(a)];
+          if(z){ const m=z.m ? ZONE_MARGIN_KM.sea : ZONE_MARGIN_KM.land; return kmToZone(loc.lat, loc.lon, z, m)<=m; }
+          if(!a.areaDesc) return false;
+          const na=normTxt(a.areaDesc); return tokens.some(t=>na.includes(t));
+        }).map(a=>a.areaDesc || areaEmma(a));
         if(!matched.length) continue;
         const onset=new Date(info.onset||info.effective||w.alert.sent).getTime();
         const exp=new Date(info.expires||0).getTime();

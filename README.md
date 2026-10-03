@@ -114,9 +114,15 @@ anys, pluja anual amb la ratlla de la normal); i un mes concret a través de tot
 els rècords. Són dades reals, no una predicció: la temperatura és molt fiable; la pluja d'un
 punt concret pot quedar suavitzada perquè la reanàlisi treballa amb caselles d'uns 25 km.
 
-**Avisos oficials:** es llegeix el feed de Meteoalarm del país i es filtra per província
-(camp `admin2` d'Open-Meteo), mostrant només avisos de nivell **groc o superior** vigents
-ara. Com que Meteoalarm bloqueja el CORS, es passa pel **worker de Cloudflare `mecai`**
+**Avisos oficials:** es llegeix el feed de Meteoalarm del país i es mostren només avisos de
+nivell **groc o superior** vigents ara. AEMET no avisa per municipis sinó per **zones** (la
+província de Barcelona en té quatre: Litoral, Prelitoral, Depressió central i Prepirineu,
+més la franja de mar), així que a Espanya l'app mira **dins de quina zona cau el poble**
+amb el contorn oficial de cada zona (`data/zones-avis-es.json`). Així, a Vic només hi surten
+els avisos de la Depressió central, no els del litoral. Els pobles a tocar d'una frontera
+entre zones (a menys de 2 km) veuen els avisos de totes dues, i els de costa també els
+d'onatge del seu tram de mar. A la resta de països es filtra pel nom de la província o
+regió (camp `admin2` d'Open-Meteo). Com que Meteoalarm bloqueja el CORS, es passa pel **worker de Cloudflare `mecai`**
 (`https://mecai.oscarbellosido.workers.dev/?action=rss&url=…`), el mateix proxy que fa servir
 el projecte **Noticies**. Per editar el worker: fitxer `mecai_worker.js` a la carpeta de Noticies.
 
@@ -131,7 +137,7 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] Temps actual: temperatura, sensació, vent + ratxes + direcció, humitat, pressió, núvols, UV, sortida/posta de sol, fase de la lluna i diferència de llum del dia respecte ahir
 - [x] Probabilitat de pluja destacada
 - [x] Predicció horària (24 h) i diària (7 dies)
-- [x] **Avisos oficials** (Meteoalarm/AEMET) per província, només nivell groc o superior i actius ara — via proxy Cloudflare (worker `mecai`, compartit amb Noticies)
+- [x] **Avisos oficials** (Meteoalarm/AEMET) de la zona d'avís on cau el poble, només nivell groc o superior i actius ara — via proxy Cloudflare (worker `mecai`, compartit amb Noticies)
 - [x] **Resum del dia** en llenguatge planer a dalt de tot (en entrar i en triar ciutat): condicions, màx/mín, quan plourà, vent (amb el seu nom tradicional: Tramuntana, Garbí, Mestral...), sensació amb humitat, nivell de contaminació, i avisos (UV, calor, fred, possible tempesta elèctrica, onada de calor/fred dels propers dies, fiabilitat dels models)
 - [x] **Consens multi-model** amb indicador de fiabilitat segons l'acord entre models
 - [x] **Gràfic horari** (corba de temperatura + barres de pluja) a "Pròximes 24 hores"

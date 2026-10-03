@@ -33,7 +33,9 @@ ElTemps/
 ├── manifest.json            ← manifest PWA (icones, nom, dreceres a 4 ciutats)
 ├── icon.svg / icon-192.png / icon-512.png
 ├── vendor/leaflet.js|.css   ← Leaflet allotjat al repo (mai CDN, vegeu §6)
+├── data/zones-avis-es.json  ← contorn de cada zona d'avís d'AEMET (per EMMA_ID), ~120 KB
 ├── scripts/avisos.js        ← Node: decideix i envia els avisos push (només s'executa a Actions)
+├── scripts/zones-avis.js    ← Node, a mà: regenera data/zones-avis-es.json (vegeu §7)
 ├── .github/workflows/
 │   ├── avisos.yml           ← cada hora: executa scripts/avisos.js
 │   └── mantenir-viu.yml     ← cada dilluns: commit buit si fa ≥50 dies que no es toca el repo
@@ -216,6 +218,18 @@ Tot d'**Open-Meteo** (gratuït, sense clau), més RainViewer per al radar:
 | Cabal de rius (GloFAS) | API d'inundacions d'Open-Meteo |
 | Radar | `api.rainviewer.com/public/weather-maps.json` + tiles |
 | Avisos oficials i índex ONI | `feeds.meteoalarm.org` / CPC, **via proxy Cloudflare** |
+
+**Avisos per zona, no per província.** AEMET avisa per zones (cada província en té
+diverses) i al feed de Meteoalarm cada `info.area[]` porta un `geocode` amb `EMMA_ID`
+(p. ex. `ES179` = Depressió central de Barcelona). `loadAlerts()` baixa
+`data/zones-avis-es.json` (només per a `ES`, un sol cop; després el serveix el service
+worker) i, si coneix el contorn de la zona, mira si el punt hi cau amb `kmToZone()`, amb
+un marge (`ZONE_MARGIN_KM`: 2 km a terra, 8 km a les zones de mar `m:1`). Les zones sense
+contorn i els altres països es continuen triant pel nom (`alertTokens`). El fitxer es
+genera amb `node scripts/zones-avis.js geocodes.json` a partir del fitxer de geocodis de
+Meteoalarm (n'hi ha una còpia al paquet de PyPI `meteoalarm`, `assets/geocodes.json`); cal
+tornar-lo a generar només si AEMET canvia les zones, i llavors **cal pujar `CACHE`** perquè
+el service worker el serveix des del cau.
 
 El **proxy Cloudflare** (`WORKER_URL` = `https://mecai.oscarbellosido.workers.dev`) és
 necessari perquè Meteoalarm i el CPC bloquegen el CORS. El worker es comparteix amb un
