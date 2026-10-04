@@ -421,8 +421,9 @@ button:disabled { background:#33485c; color:#7e93a6; cursor:not-allowed; filter:
 .radar-model { color:var(--warm); }
 .radar-legend { display:none; align-items:center; flex-wrap:wrap; gap:.3rem .55rem; margin-top:.55rem; font-size:.7rem; color:var(--text-secondary); }
 .radar-legend .rl-lab { font-weight:700; }
-.radar-legend .rl-b { display:inline-flex; align-items:center; gap:.25rem; }
-.radar-legend .rl-b i { width:.9rem; height:.6rem; border-radius:2px; }
+.radar-legend .rl-scale { display:inline-flex; align-items:flex-start; }
+.radar-legend .rl-b { display:inline-flex; flex-direction:column; align-items:flex-start; gap:.1rem; min-width:1.15rem; }
+.radar-legend .rl-b i { width:1.15rem; height:.6rem; }
 
 /* ── Favorits / compartir / frescor ─────────────────────────────────────────── */
 .chip.fav { border-color:rgba(251,191,36,.4); }
@@ -542,8 +543,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.11.1';
-const BUILD_DATE  = '2026-10-03';
+const APP_VERSION = '1.11.2';
+const BUILD_DATE  = '2026-10-04';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -3238,7 +3239,7 @@ function renderRadar(){
     </div>
     <div class="radar-legend" id="radarLegend">
       <span class="rl-lab">Pluja prevista (mm/h)</span>
-      ${RADAR_FC_BANDS.map(b=>`<span class="rl-b"><i style="background:rgb(${b.c.join(',')})"></i>${String(b.min).replace('.',',')}</span>`).join('')}
+      <span class="rl-scale">${RADAR_FC_BANDS.map(b=>`<span class="rl-b"><i style="background:${b.hex}"></i>${RADAR_FC_LABELED.includes(b.dbz)?mmhLabel(b.min):''}</span>`).join('')}</span>
     </div>
     <p class="card-note">Radar de precipitació en temps real i extrapolació a 30 min · Dades: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>.
       Les hores següents (◈) ja no són radar sinó la pluja horària que preveu el model d'<a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.</p>
@@ -3341,17 +3342,22 @@ const RADAR_FC_STEP  = 0.3;     // graus de latitud entre punts (~33 km)
 const RADAR_FC_HOURS = 6;       // hores de previsió que s'afegeixen al final
 const RADAR_FC_PX    = 256;     // mida en píxels del llenç que es projecta al mapa
 const RADAR_FC_TTL   = 20*60e3; // la previsió horària no canvia més sovint que això
-/* Escala de color per intensitat (mm en una hora), a l'estil del radar: blau fluix →
-   verd → groc → taronja → vermell → magenta. Per sota de 0,1 mm no es pinta res. */
+/* Mateixos colors que el radar. Les tiles de RainViewer es demanen amb l'esquema 6
+   ("NEXRAD Level III", el /6/ de la URL), que pinta la reflectivitat (dBZ) amb l'escala
+   estàndard del servei meteorològic dels EUA. El model dona mm d'aigua en una hora; per
+   pintar-los igual es passen a dBZ amb la relació de Marshall-Palmer (Z = 200·R^1,6), la
+   que fan servir els radars per fer el pas contrari. Així 5 mm/h surt groc com al radar,
+   i no taronja com abans. `min` és el llindar de cada color en mm/h, calculat dels dBZ. */
+const dbzToMmh = d => Math.pow(Math.pow(10, d/10)/200, 1/1.6);
 const RADAR_FC_BANDS = [
-  { min:0.1, c:[ 96,165,250], a:150 },
-  { min:0.5, c:[ 56,189,248], a:170 },
-  { min:1,   c:[ 34,197, 94], a:185 },
-  { min:2,   c:[250,204, 21], a:195 },
-  { min:5,   c:[249,115, 22], a:205 },
-  { min:10,  c:[239, 68, 68], a:215 },
-  { min:20,  c:[217, 70,239], a:225 }
-];
+  [ 5,'#04e9e7'], [10,'#019ff4'], [15,'#0300f4'], [20,'#02fd02'], [25,'#01c501'],
+  [30,'#008e00'], [35,'#fdf802'], [40,'#e5bc00'], [45,'#fd9500'], [50,'#fd0000'],
+  [55,'#d40000'], [60,'#bc0000'], [65,'#f800fd']
+].map(([dbz, hex])=>({ dbz, hex, min:dbzToMmh(dbz),
+  c:[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)) }));
+// A la llegenda només s'escriu el valor d'alguns colors, perquè no quedi atapeïda.
+const RADAR_FC_LABELED = [5, 25, 35, 45, 55];
+const mmhLabel = v => (v<1 ? v.toFixed(1) : String(Math.round(v))).replace('.',',');
 
 async function fetchRadarForecast(loc){
   const ck=`eltemps_radarfc_${loc.lat.toFixed(1)},${loc.lon.toFixed(1)}`;
@@ -3411,12 +3417,13 @@ function radarFcLayer(g, hour){
               + (v[(i0+1)*n+j0]*(1-fx)+v[(i0+1)*n+j0+1]*fx)*fy;
       const b=radarFcBand(val); if(!b) continue;
       const k=(y*px+x)*4;
-      img.data[k]=b.c[0]; img.data[k+1]=b.c[1]; img.data[k+2]=b.c[2]; img.data[k+3]=b.a;
+      img.data[k]=b.c[0]; img.data[k+1]=b.c[1]; img.data[k+2]=b.c[2]; img.data[k+3]=255;
     }
   }
   ctx.putImageData(img,0,0);
   const bounds=[[g.lat0, g.lon0],[g.lat0+(n-1)*g.dLat, g.lon0+(n-1)*g.dLon]];
-  return L.imageOverlay(cv.toDataURL(), bounds, { opacity:0.62, zIndex:2, interactive:false });
+  // Mateixa transparència que la capa del radar (opacity:0.7), perquè es vegin igual.
+  return L.imageOverlay(cv.toDataURL(), bounds, { opacity:0.7, zIndex:2, interactive:false });
 }
 
 /* S'afegeix al final de l'animació quan arriba, sense fer esperar el radar. El comptador

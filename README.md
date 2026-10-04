@@ -102,7 +102,10 @@ Tot ve d'**[Open-Meteo](https://open-meteo.com)** — gratuït i sense clau d'AP
 **Radar més enllà de mitja hora:** RainViewer només extrapola les imatges del radar 30
 minuts. Per allargar l'animació unes hores es demana a Open-Meteo la pluja horària d'una
 graella de 15×15 punts (~33 km entre punts) al voltant de la ubicació i es pinta al mapa
-interpolada, amb l'escala de color de la llegenda. No és radar: és la previsió d'un model,
+interpolada, **amb els mateixos colors que el radar** (l'escala NEXRAD que fa servir
+RainViewer; els mm/h del model es passen a dBZ amb la relació de Marshall-Palmer,
+Z = 200·R^1,6), així un mateix xàfec té el mateix color abans i després de la ratlla.
+No és radar: és la previsió d'un model,
 més gruixuda i menys fiable com més lluny va, i per això surt marcada a part (◈). Es guarda
 20 minuts al navegador i, si falla, el radar segueix funcionant igual.
 
@@ -145,8 +148,8 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] **Mar i muntanya**: onatge i temperatura del mar (litoral) + cota de glaçada i neu (muntanya)
 - [x] **Radar de pluja amb previsió a 6 hores** (mapa Leaflet): les dues últimes hores i
   l'extrapolació a 30 min són imatges de radar de RainViewer; a partir d'aquí l'animació
-  continua amb la pluja horària que preveu el model (Open-Meteo), marcada amb ◈ i amb
-  llegenda de mm/h, per veure cap on va la tempesta
+  continua amb la pluja horària que preveu el model (Open-Meteo), marcada amb ◈, amb
+  els mateixos colors que el radar i llegenda de mm/h, per veure cap on va la tempesta
 - [x] Cerca mundial amb autocompletar (català/castellà) + geolocalització
 - [x] Accés ràpid a ciutats catalanes + **favorits** + històric de cerques recents
 - [x] **Compartir** (Web Share) amb enllaços directes (`?lat=&lon=&name=`) o com a **imatge** (targeta resum dibuixada en un `<canvas>`, ideal per a WhatsApp)
