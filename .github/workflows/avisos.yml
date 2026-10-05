@@ -35,7 +35,11 @@ concurrency:
 jobs:
   avisar:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 10 min: marge per si queda esperant torn (el despertador en dispara un cada 15 min
+    # i mai es poden encavalcar dos, vegeu "concurrency" més amunt) sense arribar a tocar
+    # el següent cicle. Abans eren 5 min i de tant en tant es tallava un llançament que
+    # encara esperava torn, abans que arribés a fer res.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
