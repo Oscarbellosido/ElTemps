@@ -543,8 +543,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.11.2';
-const BUILD_DATE  = '2026-10-04';
+const APP_VERSION = '1.11.3';
+const BUILD_DATE  = '2026-10-09';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -3613,7 +3613,14 @@ function familyFor(loc){
   return null;
 }
 
+/* Aniversaris, sants i dies especials: DESACTIVATS de moment (a petició, octubre 2026).
+   Mateix patró que "Mode família" (funOn, més amunt): l'interruptor torna false i prou;
+   les dades (BIRTHDAYS, SANTS, EVENTS) i la resta d'aquesta funció es queden intactes.
+   Per tornar-ho a engegar, només cal canviar aquest false per true. */
+function specialOn(){ return false; }
+
 function renderSpecial(fc){
+  if(!specialOn()) return '';
   const bdays=todaysBirthdays();
   const sants=todaysSants();
   const evts=todaysEvents();

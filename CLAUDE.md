@@ -308,6 +308,10 @@ de revertir.
 - **Mode família desactivat.** `funOn()` retorna `false` i el botó 😜 ja no hi és (v1.4.2).
   El codi es conserva a propòsit per si es vol tornar a engegar. No el reactivis pel teu
   compte ni l'esborris.
+- **Aniversaris, sants i dies especials desactivats.** `specialOn()` (al costat de
+  `renderSpecial()`) retorna `false` a petició de l'usuari (v1.11.3). `BIRTHDAYS`, `SANTS`,
+  `EVENTS` i la resta de `renderSpecial()` es conserven intactes; no els esborris ni
+  reactivis l'interruptor pel teu compte.
 - **Leaflet és de càrrega tardana** (`loadLeaflet`): ~160 KB que només es baixen quan el
   radar entra en pantalla. No el posis al `<head>`.
 - **Els fotogrames de previsió del radar no són radar.** Van marcats amb ◈ i etiquetats amb
