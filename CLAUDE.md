@@ -312,6 +312,12 @@ de revertir.
   `renderSpecial()`) retorna `false` a petició de l'usuari (v1.11.3). `BIRTHDAYS`, `SANTS`,
   `EVENTS` i la resta de `renderSpecial()` es conserven intactes; no els esborris ni
   reactivis l'interruptor pel teu compte.
+- **Donar-se d'alta als avisos push, desactivat.** El botó 🔔 `notifBtn` s'ha tret de
+  `renderSummary()` (v1.11.5): editar el secret `PUSH_SUBS` a mà cada cop que algú de la
+  família es volia afegir era massa complicat. `toggleNotif()`, `showNotifDialog()`,
+  `disableNotif()` i tot el backend (`avisos.yml`, `scripts/avisos.js`, el despertador)
+  es conserven intactes i segueixen avisant qui ja hi era donat d'alta — només no es pot
+  donar d'alta ningú més des de l'app. No reactivis el botó pel teu compte.
 - **Leaflet és de càrrega tardana** (`loadLeaflet`): ~160 KB que només es baixen quan el
   radar entra en pantalla. No el posis al `<head>`.
 - **Els fotogrames de previsió del radar no són radar.** Van marcats amb ◈ i etiquetats amb

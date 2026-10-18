@@ -165,8 +165,6 @@ ECMWF · ICON (DWD) · AROME (Météo-France) · GFS (NOAA) · GEM (Canadà) · 
 - [x] **Compara amb un altre lloc**: cerca una segona població i veu-la costat a costat amb
   l'actual (temperatura, sensació, màx/mín, pluja i vent d'avui); es manté encara que canviïs
   de ciutat principal
-- [x] **Avisos al mòbil i al rellotge** quan es preveu calor forta, tempesta elèctrica, pluja o
-  vent fort a punt d'arribar, encara que l'app estigui tancada (vegeu l'apartat 🔔 més avall)
 
 ---
 
@@ -183,26 +181,37 @@ Coses que es poden incorporar més endavant:
 
 ## 🔔 Avisos al mòbil (i al rellotge)
 
+> ⚠️ **Donar-se d'alta està pausat de moment** (des de la v1.11.5): calia editar a mà el
+> secret `PUSH_SUBS` cada cop que algú de la família es volia afegir, i amb més d'un
+> telèfon això era massa complicat. El botó 🔔 ja no surt a l'app. La resta d'aquest
+> apartat es queda tal qual: qui ja hi era donat d'alta continua rebent avisos amb
+> normalitat, i si mai es vol reactivar el botó, tot el codi (`toggleNotif()`,
+> `showNotifDialog()`...) hi segueix sencer.
+
 L'app pot avisar-te al telèfon quan es prevegi **calor forta**, **tempesta elèctrica**, **pluja**
 o **vent fort a punt d'arribar**, encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís
 hi arriba sol: el rellotge repeteix les notificacions del mòbil, no cal cap app de rellotge.
 
-### Com s'activa (un sol cop per telèfon)
+### Afegir-hi algú a mà
 
-1. Obre l'app, tria la població i prem **🔔 Avisa'm**.
-2. Accepta el permís de notificacions.
-3. Surt un quadre amb un text: copia'l.
-4. Ves a **Settings → Secrets and variables → Actions** del repositori, prem
-   **New repository secret**, posa-li de nom `PUSH_SUBS` i enganxa-hi el text.
+Com que ara no hi ha botó, l'única manera de donar d'alta un telèfon és editant el secret
+`PUSH_SUBS` directament des de **Settings → Secrets and variables → Actions** del
+repositori (prem sobre `PUSH_SUBS` per actualitzar-lo, no "New repository secret": ja
+existeix). El valor ha de ser una llista JSON amb un bloc per telèfon:
 
-Per donar d'alta un segon telèfon, repeteix-ho i afegeix el nou bloc dins del mateix
-secret, separat per una coma.
+```json
+[
+  { "name": "...", "lat": ..., "lon": ..., "endpoint": "...", "keys": { "p256dh": "...", "auth": "..." } }
+]
+```
+
+GitHub no deixa veure el valor que ja hi havia, així que cal conèixer els blocs de tots els
+telèfons alhora per no perdre'n cap en actualitzar-lo.
 
 ### Com funciona per dins
 
 | Peça | Què fa |
 |---|---|
-| Botó **🔔 Avisa'm** a `index.html` | Demana permís i crea la subscripció del telèfon |
 | `sw.js` (esdeveniment `push`) | Rep l'avís i el mostra com a notificació del sistema |
 | `.github/workflows/avisos.yml` | Engega la comprovació (cada 15 min amb el despertador, i es pot llançar a mà) |
 | `scripts/avisos.js` | Mira el temps de cada telèfon i decideix si cal avisar |

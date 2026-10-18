@@ -543,7 +543,7 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.11.4';
+const APP_VERSION = '1.11.5';
 const BUILD_DATE  = '2026-10-18';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
@@ -977,7 +977,16 @@ async function shareImage(){
    telèfon. Es copia un sol cop al secret PUSH_SUBS del repositori, i la tasca
    .github/workflows/avisos.yml mira el temps cada hora i, quan hi ha calor
    forta o pluja a punt de caure, envia l'avís. Al rellotge hi arriba sol,
-   perquè Wear OS repeteix al canell les notificacions del mòbil. */
+   perquè Wear OS repeteix al canell les notificacions del mòbil.
+
+   DONAR-SE D'ALTA, DESACTIVAT de moment (massa complicat haver d'editar a mà el
+   secret PUSH_SUBS de GitHub cada cop que algú de la família s'hi volia afegir).
+   S'ha tret el botó 🔔 de la capçalera, igual que es va fer amb el de mode família
+   (funOn(), més amunt). Tota la resta — toggleNotif(), showNotifDialog(),
+   disableNotif(), i el backend sencer (avisos.yml, scripts/avisos.js, el
+   despertador) — es queda intacta i segueix avisant qui ja hi era donat d'alta;
+   només no es pot donar d'alta ningú més des de l'app. Per tornar-ho a posar,
+   torna a afegir el botó a renderSummary() (vegeu la v1.11.4 al git log). */
 function notifSupported(){
   return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
 }
@@ -1700,7 +1709,6 @@ function renderSummary(loc, fc, models, air){
         <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
         <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
         <button id="shareImgBtn" class="icon-btn" onclick="shareImage()" title="Comparteix com a imatge">🖼️ Imatge</button>
-        <button id="notifBtn" class="icon-btn" onclick="toggleNotif()" title="Avisos al mòbil">🔔 Avisa'm</button>
       </div>
     </div>
     <p class="sum-text">${txt}</p>
@@ -3476,7 +3484,6 @@ function showWelcome(){
       <li>🌧️ <strong>Radar de pluja</strong> — de les últimes dues hores fins a sis hores endavant, per veure cap on va la tempesta</li>
       <li>🔮 <strong>Mesos vinents</strong> i 📜 <strong>clima des del 1940</strong> — tendència estacional i 86 anys d'històric real, mes a mes</li>
       <li>⚠️ <strong>Avisos oficials</strong> — alertes de Meteoalarm i AEMET en temps real</li>
-      <li>🔔 <strong>Avisos al mòbil</strong> — calor forta, tempesta, pluja o vent fort a punt d'arribar, encara amb l'app tancada</li>
       <li>🔗 <strong>Favorits i compartir</strong> — desa els teus llocs i comparteix el resum del dia amb un sol toc</li>
       <li>📵 <strong>Mode sense connexió</strong> — mostra l'última dada coneguda si no hi ha xarxa</li>
     </ul>
