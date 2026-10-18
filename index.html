@@ -543,8 +543,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.11.3';
-const BUILD_DATE  = '2026-10-09';
+const APP_VERSION = '1.11.4';
+const BUILD_DATE  = '2026-10-18';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -1063,9 +1063,12 @@ function showNotifDialog(payload, state, msg){
       <p class="welcome-sub">No has contestat a la pregunta dels avisos. Torna a tocar el botó i tria <strong>Permetre</strong>.</p>`;
   } else {
     inner=`<h2>Un últim pas</h2>
-      <p class="welcome-sub">Copia aquest text i enganxa'l a GitHub. Només cal fer-ho un cop.</p>
+      <p class="welcome-sub">Copia aquest text i envia'l (per WhatsApp, per exemple) a qui porta l'app, perquè
+      t'afegeixi al servei d'avisos. Només cal fer-ho un cop.</p>
       <textarea id="notifSub" class="notif-sub" readonly rows="5">${esc(payload)}</textarea>
       <button id="notifCopyBtn" class="notif-copy" onclick="copyNotifSub()">📋 Copiar</button>
+      <p class="notif-note"><strong>Ets tu qui administra el repositori de GitHub?</strong> Doncs pots fer-ho tu
+      mateix, ara mateix:</p>
       <ol class="notif-steps">
         <li>Obre <a href="${SECRET_URL}" target="_blank" rel="noopener">els secrets del repositori</a>.</li>
         <li>Prem <strong>New repository secret</strong>.</li>
@@ -1074,7 +1077,7 @@ function showNotifDialog(payload, state, msg){
         <li>Prem <strong>Add secret</strong>. Ja està.</li>
       </ol>
       <p class="notif-note">A partir d'aquí rebràs un avís quan es prevegi calor forta, tempesta, pluja o vent fort a punt d'arribar.
-      Si ja tenies un altre telèfon donat d'alta, edita el secret i afegeix-hi aquest, separat per una coma.
+      Si ja hi havia un altre telèfon donat d'alta, cal editar el secret i afegir-hi aquest, separat per una coma.
       <br><br>Pots tornar a prémer <strong>🔔</strong> quan vulguis per recuperar aquest text: no apaga res.</p>
       <button class="notif-off" onclick="disableNotif()">Desactivar els avisos en aquest telèfon</button>`;
   }
