@@ -239,8 +239,13 @@ function buildMessage(fc, sub, sent = {}, nowMs = Date.now()) {
 }
 
 /* ── Memòria del que s'ha enviat ─────────────────────────────────────────────── */
+/* Inclou lat/lon a més de l'endpoint: un mateix telèfon pot estar donat d'alta a
+   diverses poblacions alhora (una entrada de PUSH_SUBS per població, totes amb
+   el mateix endpoint/keys). Si la clau fos només l'endpoint, un avís de pluja a
+   la primera població "gastaria" el cooldown de les altres i se silenciarien
+   avisos reals de llocs diferents. */
 function subKey(sub) {
-  return crypto.createHash('sha256').update(sub.endpoint).digest('hex').slice(0, 16);
+  return crypto.createHash('sha256').update(`${sub.endpoint}|${sub.lat},${sub.lon}`).digest('hex').slice(0, 16);
 }
 function loadState() {
   try {

@@ -256,8 +256,8 @@ Peça per peça:
 
 | Peça | Funció |
 |---|---|
-| Botó **🔔 Avisa'm** (`toggleNotif`) | crea la subscripció i mostra el text per enganxar al secret |
-| Secret `PUSH_SUBS` | llista JSON de telèfons donats d'alta (nom, lat, lon, endpoint, keys) |
+| Botó **🔔 Avisa'm** (`toggleNotif`) | crea la subscripció i mostra el text per enganxar al secret; amagat tret de `?avisa=1` a la URL (vegeu §9) |
+| Secret `PUSH_SUBS` | llista JSON d'entrades donades d'alta (nom, lat, lon, endpoint, keys); un telèfon pot tenir-ne diverses (mateix endpoint/keys, poblacions diferents) |
 | Secret `VAPID_PRIVATE_KEY` | signa els enviaments |
 | `.github/workflows/avisos.yml` | cada 15 min via `workflow_dispatch` del despertador, horari de reserva, i a mà (casella **prova**) |
 | `scripts/despertador-avisos.js` | Cloudflare Worker amb Cron Trigger `*/15`; secret `GH_TOKEN` (token fine-grained, només *Actions: Read and write* sobre ElTemps) |
@@ -272,14 +272,18 @@ fora s'executa a l'instant; per això el Worker de Cloudflare el crida cada 15 m
 **Memòria d'enviaments.** Com que passa cada 15 minuts, `avisos.js` recorda què ha enviat en
 `estat-avisos.json` (variable `ESTAT`), que el workflow recupera i desa amb
 `actions/cache/restore` i `actions/cache/save` (clau `avisos-estat-<run_id>`; no cal cap
-permís d'escriptura al repositori). Format: `{v:1, s:{<sha256(endpoint) 16 hex>:{calor:'AAAA-MM-DD',
+permís d'escriptura al repositori). Format: `{v:1, s:{<sha256(endpoint+lat,lon) 16 hex>:{calor:'AAAA-MM-DD',
 tempesta:ms, pluja:ms, vent:ms}}}`. **Res de noms, coordenades ni endpoints**: la cache d'un
-repositori públic la pot llegir un workflow de PR. Regles: calor un cop per dia local dins de
-`HEAT_HOURS` (7–12 h); tempesta, pluja i vent només si encara no hi són, dins de 7–22 h, i no
-més d'un cop cada `COOLDOWN_H` (3 h); la pluja tampoc si s'acaba d'avisar de tempesta. Les
-proves (`PROVA`) no es recorden. `buildMessage(fc, sub, sent, nowMs)` rep la memòria del
-telèfon com a paràmetre opcional, així es pot provar sense fitxers. Si el fitxer es perd, el
-pitjor que passa és un avís repetit una vegada; si canvies aquesta lògica, mantingues-ho així.
+repositori públic la pot llegir un workflow de PR. `subKey()` barreja l'endpoint AMB el
+lat/lon (no només l'endpoint): un mateix telèfon pot tenir diverses entrades a `PUSH_SUBS`
+(una per població), i si la clau fos només l'endpoint, un avís a la primera població
+gastaria el cooldown de les altres i en silenciaria d'autèntics (v1.11.6). Regles: calor un
+cop per dia local dins de `HEAT_HOURS` (7–12 h); tempesta, pluja i vent només si encara no hi
+són, dins de 7–22 h, i no més d'un cop cada `COOLDOWN_H` (3 h); la pluja tampoc si s'acaba
+d'avisar de tempesta. Les proves (`PROVA`) no es recorden. `buildMessage(fc, sub, sent, nowMs)`
+rep la memòria del telèfon com a paràmetre opcional, així es pot provar sense fitxers. Si el
+fitxer es perd, el pitjor que passa és un avís repetit una vegada; si canvies aquesta lògica,
+mantingues-ho així.
 
 ⚠️ **Duplicació coneguda:** `heatPeak()` i `windName()` existeixen a `index.html` **i** a
 `scripts/avisos.js`, amb els mateixos llindars (calor: 35 °C / 40 °C; vent: ratxes ≥ 50 km/h
@@ -312,12 +316,12 @@ de revertir.
   `renderSpecial()`) retorna `false` a petició de l'usuari (v1.11.3). `BIRTHDAYS`, `SANTS`,
   `EVENTS` i la resta de `renderSpecial()` es conserven intactes; no els esborris ni
   reactivis l'interruptor pel teu compte.
-- **Donar-se d'alta als avisos push, desactivat.** El botó 🔔 `notifBtn` s'ha tret de
-  `renderSummary()` (v1.11.5): editar el secret `PUSH_SUBS` a mà cada cop que algú de la
-  família es volia afegir era massa complicat. `toggleNotif()`, `showNotifDialog()`,
-  `disableNotif()` i tot el backend (`avisos.yml`, `scripts/avisos.js`, el despertador)
-  es conserven intactes i segueixen avisant qui ja hi era donat d'alta — només no es pot
-  donar d'alta ningú més des de l'app. No reactivis el botó pel teu compte.
+- **Donar-se d'alta als avisos push, amagat tret del propietari.** El botó 🔔 `notifBtn`
+  (v1.11.5) només es pinta a `renderSummary()` quan `notifSignupOn()` és cert, cosa que
+  només passa amb `?avisa=1` a la URL (v1.11.6): editar el secret `PUSH_SUBS` a mà cada cop
+  que algú de la família es volia afegir era massa complicat, però el propietari encara el
+  fa servir per a ell mateix (diverses poblacions, un bloc per cadascuna amb el mateix
+  endpoint/keys — vegeu §8). No el tornis a mostrar sense aquest paràmetre ni l'esborris.
 - **Leaflet és de càrrega tardana** (`loadLeaflet`): ~160 KB que només es baixen quan el
   radar entra en pantalla. No el posis al `<head>`.
 - **Els fotogrames de previsió del radar no són radar.** Van marcats amb ◈ i etiquetats amb

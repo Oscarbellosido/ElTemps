@@ -181,37 +181,43 @@ Coses que es poden incorporar més endavant:
 
 ## 🔔 Avisos al mòbil (i al rellotge)
 
-> ⚠️ **Donar-se d'alta està pausat de moment** (des de la v1.11.5): calia editar a mà el
-> secret `PUSH_SUBS` cada cop que algú de la família es volia afegir, i amb més d'un
-> telèfon això era massa complicat. El botó 🔔 ja no surt a l'app. La resta d'aquest
-> apartat es queda tal qual: qui ja hi era donat d'alta continua rebent avisos amb
-> normalitat, i si mai es vol reactivar el botó, tot el codi (`toggleNotif()`,
-> `showNotifDialog()`...) hi segueix sencer.
+> ⚠️ **El botó 🔔 Avisa'm està amagat per a la gent normal** (des de la v1.11.5): calia
+> editar a mà el secret `PUSH_SUBS` cada cop que algú de la família es volia afegir, i amb
+> més d'un telèfon això era massa complicat. Només hi surt amb `?avisa=1` a la URL
+> (v1.11.6) — és a dir, per a qui administra el repositori. Qui ja hi era donat d'alta
+> continua rebent avisos amb normalitat.
 
 L'app pot avisar-te al telèfon quan es prevegi **calor forta**, **tempesta elèctrica**, **pluja**
 o **vent fort a punt d'arribar**, encara que la tinguis tancada. Si tens un rellotge Wear OS o Galaxy Watch, l'avís
 hi arriba sol: el rellotge repeteix les notificacions del mòbil, no cal cap app de rellotge.
 
-### Afegir-hi algú a mà
+### Donar-se d'alta a diverses poblacions (com a propietari)
 
-Com que ara no hi ha botó, l'única manera de donar d'alta un telèfon és editant el secret
-`PUSH_SUBS` directament des de **Settings → Secrets and variables → Actions** del
-repositori (prem sobre `PUSH_SUBS` per actualitzar-lo, no "New repository secret": ja
-existeix). El valor ha de ser una llista JSON amb un bloc per telèfon:
+1. Obre l'app amb `?avisa=1&lat=..&lon=..&name=..` (per exemple,
+   `?avisa=1&lat=41.3888&lon=2.1590&name=Barcelona`) i prem **🔔 Avisa'm**.
+2. Accepta el permís de notificacions i copia el text que surt.
+3. Canvia `lat`/`lon`/`name` a la URL per la pròxima població i torna a prémer **🔔**:
+   com que ja estàs subscrit, surt un bloc nou amb el mateix telèfon però la població nova.
+   Repeteix-ho per a cada població.
+4. Combina tots els blocs dins un **sol `[ ]`**, separats per comes, i enganxa'l a
+   **Settings → Secrets and variables → Actions → `PUSH_SUBS`** del repositori (prem sobre
+   `PUSH_SUBS` per actualitzar-lo, no "New repository secret": ja existeix).
 
 ```json
 [
-  { "name": "...", "lat": ..., "lon": ..., "endpoint": "...", "keys": { "p256dh": "...", "auth": "..." } }
+  { "name": "Barcelona", "lat": ..., "lon": ..., "endpoint": "...", "keys": {...} },
+  { "name": "Taradell",  "lat": ..., "lon": ..., "endpoint": "...", "keys": {...} }
 ]
 ```
 
-GitHub no deixa veure el valor que ja hi havia, així que cal conèixer els blocs de tots els
-telèfons alhora per no perdre'n cap en actualitzar-lo.
+GitHub no deixa veure el valor que ja hi havia, així que cal tenir tots els blocs a mà alhora
+per no perdre'n cap en actualitzar-lo.
 
 ### Com funciona per dins
 
 | Peça | Què fa |
 |---|---|
+| Botó **🔔 Avisa'm** a `index.html` (amagat tret de `?avisa=1`) | Demana permís i crea/recupera la subscripció del telèfon |
 | `sw.js` (esdeveniment `push`) | Rep l'avís i el mostra com a notificació del sistema |
 | `.github/workflows/avisos.yml` | Engega la comprovació (cada 15 min amb el despertador, i es pot llançar a mà) |
 | `scripts/avisos.js` | Mira el temps de cada telèfon i decideix si cal avisar |

@@ -543,8 +543,8 @@ const NOTIF_KEY    = 'eltemps_notif';
    qui té permís per enviar-te avisos. La privada NO és aquí — viu als secrets de GitHub. */
 const VAPID_PUBLIC = 'BOu4wYkYBxYTanQaAyvKyfoPuiMbe-ARbrCeiALByjrCvTCFMitPdCST4mYWiRsc2ou2kuC_3pec8JJcZ5lxnCk';
 const MAX_RECENT = 8;
-const APP_VERSION = '1.11.5';
-const BUILD_DATE  = '2026-10-18';
+const APP_VERSION = '1.11.6';
+const BUILD_DATE  = '2026-10-19';
 const REFRESH_MS  = 10 * 60 * 1000;   // refresc automàtic de dades
 
 /* Estat actual (per a favorits, compartir, frescor i auto-refresc) */
@@ -979,14 +979,18 @@ async function shareImage(){
    forta o pluja a punt de caure, envia l'avís. Al rellotge hi arriba sol,
    perquè Wear OS repeteix al canell les notificacions del mòbil.
 
-   DONAR-SE D'ALTA, DESACTIVAT de moment (massa complicat haver d'editar a mà el
-   secret PUSH_SUBS de GitHub cada cop que algú de la família s'hi volia afegir).
-   S'ha tret el botó 🔔 de la capçalera, igual que es va fer amb el de mode família
-   (funOn(), més amunt). Tota la resta — toggleNotif(), showNotifDialog(),
-   disableNotif(), i el backend sencer (avisos.yml, scripts/avisos.js, el
-   despertador) — es queda intacta i segueix avisant qui ja hi era donat d'alta;
-   només no es pot donar d'alta ningú més des de l'app. Per tornar-ho a posar,
-   torna a afegir el botó a renderSummary() (vegeu la v1.11.4 al git log). */
+   DONAR-SE D'ALTA, amagat per a tothom tret de qui porta l'enllaç amb ?avisa=1
+   (massa complicat per a la família haver d'editar a mà el secret PUSH_SUBS de
+   GitHub cada cop; vegeu v1.11.5). El botó 🔔 només es pinta a renderSummary()
+   quan notifSignupOn() és cert, així la gent normal no el veu mai, però qui
+   administra l'app es pot subscriure quan vulgui obrint
+   ?avisa=1&lat=..&lon=..&name=.. (combinable amb els paràmetres de compartir
+   que ja existien). Prement 🔔 un cop per cada població es té un bloc de text
+   per cadascuna (mateix endpoint/keys del telèfon, name/lat/lon diferents); cal
+   combinar-los tots dins un sol array abans d'enganxar-los a PUSH_SUBS. */
+function notifSignupOn(){
+  try{ return new URLSearchParams(location.search).get('avisa')==='1'; }catch{ return false; }
+}
 function notifSupported(){
   return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
 }
@@ -1709,6 +1713,7 @@ function renderSummary(loc, fc, models, air){
         <button id="favBtn" class="icon-btn" onclick="toggleFav()" title="Afegir als favorits">☆ Desa</button>
         <button id="shareBtn" class="icon-btn" onclick="shareCurrent()" title="Comparteix">🔗 Comparteix</button>
         <button id="shareImgBtn" class="icon-btn" onclick="shareImage()" title="Comparteix com a imatge">🖼️ Imatge</button>
+        ${notifSignupOn() ? `<button id="notifBtn" class="icon-btn" onclick="toggleNotif()" title="Avisos al mòbil">🔔 Avisa'm</button>` : ''}
       </div>
     </div>
     <p class="sum-text">${txt}</p>
